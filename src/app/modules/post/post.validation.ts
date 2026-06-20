@@ -6,6 +6,7 @@ export const CreatePostZod = z.object({
   commentAccess: z.enum(["FOLLOWERS", "EVERYONE"], {
     message: "Comment access must be either FOLLOWERS or EVERYONE",
   }),
+  price: z.number().positive().optional(),
 });
 
 export type TCreatePost = z.infer<typeof CreatePostZod> & {

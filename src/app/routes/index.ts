@@ -26,6 +26,7 @@ import { boostRoutes } from "../modules/boost/boost.routes";
 import { notificationRoutes } from "../modules/notification/notification.routes";
 import { paymentRoutes } from "../modules/payment/payment.routes";
 import { walletRoutes } from "../modules/wallet/wallet.routes";
+import { offerRoutes } from "../modules/offer/offer.routes";
 
 const router = Router();
 
@@ -55,6 +56,7 @@ const routes = [
   { path: "/notifications", route: notificationRoutes },
   { path: "/payments", route: paymentRoutes },
   { path: "/wallet", route: walletRoutes },
+  { path: "/offers", route: offerRoutes },
 
   { path: "/admins", route: adminRoutes },
   { path: "/upload-files", route: fileRoutes },
