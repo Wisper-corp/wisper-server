@@ -47,6 +47,8 @@ model Auth {
   callParticipants        CallParticipant[]
   payments                Payment[]
   notifications           Notification[]
+  sentOffers              Offer[]                  @relation("OfferSender")
+  receivedOffers          Offer[]                  @relation("OfferReceiver")
 
   @@map("auths")
 }
@@ -120,6 +122,7 @@ model Post {
   views         Int           @default(0)
   isSponsored   Boolean       @default(false)
   commentAccess CommentAccess
+  price         Float?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   comment       Comment[]
@@ -486,6 +489,23 @@ model Payment {
   @@map("payments")
 }
 
+model Offer {
+  id          String      @id @default(uuid())
+  senderId    String
+  sender      Auth        @relation(name: "OfferSender", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    Auth        @relation(name: "OfferReceiver", fields: [receiverId], references: [id])
+  chatId      String
+  amount      Float
+  description String
+  duration    String
+  status      OfferStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("offers")
+}
+
 enum PostStatus {
   ACTIVE
   TRASHED
@@ -638,4 +658,11 @@ enum LoginProvider {
   FACEBOOK
   GOOGLE
   EMAIL
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  PAID
 }
