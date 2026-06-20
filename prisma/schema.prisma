@@ -498,6 +498,7 @@ model Offer {
   chatId      String
   amount      Float
   description String
+  duration    String
   status      OfferStatus @default(PENDING)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt

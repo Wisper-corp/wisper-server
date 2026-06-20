@@ -6,7 +6,7 @@ import { offerService } from "./offer.service";
 
 // Create a new offer
 const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { receiverId, chatId, amount, description } = req.body;
+  const { receiverId, chatId, amount, description, duration } = req.body;
   const senderId = req.user!.id;
 
   const offer = await offerService.create({
@@ -15,6 +15,7 @@ const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
     chatId,
     amount,
     description,
+    duration,
   });
 
   sendResponse(res, {

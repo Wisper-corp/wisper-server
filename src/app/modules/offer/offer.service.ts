@@ -9,6 +9,7 @@ const create = async (data: {
   chatId: string;
   amount: number;
   description: string;
+  duration: string;
 }) => {
   const offer = await prisma.offer.create({
     data: {
