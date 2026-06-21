@@ -57,15 +57,46 @@ const getWalletTransactions = async (authId: string, page: number = 1, limit: nu
 
 // Process Monnify webhook
 const processMonnifyWebhook = async (eventData: any) => {
-  const { amountPaid, paymentStatus, metaData } = eventData;
+  console.log('Processing Monnify eventData:', JSON.stringify(eventData, null, 2));
 
-  if (paymentStatus !== 'PAID') {
+  const { amountPaid, totalPayable, paymentStatus, metaData, customerEmail } = eventData;
+
+  const isPaid = paymentStatus === 'PAID' || paymentStatus === 'SUCCESS' || paymentStatus === 'COMPLETED';
+  if (!isPaid) {
+    console.log('Payment not completed, status:', paymentStatus);
     return { status: 'ignored', message: 'Payment not completed' };
   }
 
-  // Get user from metadata
-  const authId = metaData?.user_id;
-  if (!authId) throw new ApiError(400, 'User ID not found in metadata');
+  // Get amount - use amountPaid or totalPayable
+  const amount = parseFloat(amountPaid || totalPayable || '0');
+  if (amount <= 0) {
+    throw new ApiError(400, 'Invalid payment amount');
+  }
+
+  // Get user from metadata or find by email
+  let authId = metaData?.user_id || metaData?.userId;
+
+  if (!authId && customerEmail) {
+    // Fallback: find user by email
+    console.log('No user_id in metaData, searching by email:', customerEmail);
+    const person = await prisma.person.findFirst({
+      where: { email: customerEmail },
+      select: { authId: true },
+    });
+    const business = !person ? await prisma.business.findFirst({
+      where: { email: customerEmail },
+      select: { authId: true },
+    }) : null;
+
+    authId = person?.authId || business?.authId;
+  }
+
+  if (!authId) {
+    console.error('Cannot find user for payment. metaData:', metaData, 'email:', customerEmail);
+    throw new ApiError(400, 'User ID not found - cannot credit wallet');
+  }
+
+  console.log('Crediting wallet for user:', authId, 'amount:', amount);
 
   // Get or create wallet
   let wallet = await prisma.wallet.findUnique({ where: { authId } });
@@ -77,20 +108,22 @@ const processMonnifyWebhook = async (eventData: any) => {
   const result = await prisma.$transaction(async (tx) => {
     const updatedWallet = await tx.wallet.update({
       where: { id: wallet!.id },
-      data: { balance: { increment: parseFloat(amountPaid) } },
+      data: { balance: { increment: amount } },
     });
 
     const transaction = await tx.transaction.create({
       data: {
         walletId: wallet!.id,
         type: 'DEPOSIT',
-        amount: parseFloat(amountPaid),
+        amount: amount,
         date: new Date(),
       },
     });
 
     return { wallet: updatedWallet, transaction };
   });
+
+  console.log('Wallet credited. New balance:', result.wallet.balance);
 
   return {
     status: 'success',

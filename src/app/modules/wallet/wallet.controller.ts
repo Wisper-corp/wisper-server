@@ -32,20 +32,21 @@ const getWalletTransactions = handleAsyncRequest(async (req: TRequest, res: Resp
 // Monnify webhook handler (no auth needed)
 const monnifyWebhook = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const { eventType, eventData } = req.body;
-  console.log('Monnify Webhook Received:', { eventType, transactionRef: eventData?.transactionReference });
 
-  if (eventType !== 'SUCCESSFUL_TRANSACTION') {
-    return sendResponse(res, {
-      message: 'Event ignored - not a successful transaction',
-      data: { status: 'ignored' },
-    });
+  console.log('Monnify Webhook Full Body:', JSON.stringify(req.body, null, 2));
+
+  // Respond immediately with 200 - Monnify requires this fast response
+  res.status(200).json({ success: true });
+
+  // Process asynchronously after responding
+  if (eventType === 'SUCCESSFUL_TRANSACTION' && eventData) {
+    try {
+      await walletService.processMonnifyWebhook(eventData);
+      console.log('Monnify: wallet credited successfully');
+    } catch (err: any) {
+      console.error('Monnify: error crediting wallet:', err?.message);
+    }
   }
-
-  const result = await walletService.processMonnifyWebhook(eventData);
-  sendResponse(res, {
-    message: 'Webhook processed successfully',
-    data: result,
-  });
 });
 
 // Initialize Monnify payment
