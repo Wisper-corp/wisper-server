@@ -1,6 +1,6 @@
 import { OfferStatus } from "@prisma/client";
 import prisma from "../../utils/prisma";
-import ApiError from "../../errors/ApiError";
+import ApiError from "../../middlewares/classes/ApiError";
 
 // Create a new offer
 const create = async (data: {
