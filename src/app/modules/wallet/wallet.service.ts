@@ -1,18 +1,19 @@
 import prisma from '../../utils/prisma';
 import ApiError from '../../middlewares/classes/ApiError';
 
-// Get wallet balance
+// Get wallet balance - auto-create wallet if not exists
 const getWalletBalance = async (authId: string) => {
-  const wallet = await prisma.wallet.findUnique({
+  let wallet = await prisma.wallet.findUnique({
     where: { authId },
-    select: {
-      id: true,
-      balance: true,
-    },
+    select: { id: true, balance: true },
   });
 
+  // Auto-create wallet if it doesn't exist yet
   if (!wallet) {
-    throw new ApiError(404, 'Wallet not found');
+    wallet = await prisma.wallet.create({
+      data: { authId, balance: 0 },
+      select: { id: true, balance: true },
+    });
   }
 
   return { balance: wallet.balance };
@@ -78,16 +79,25 @@ const processMonnifyWebhook = async (eventData: any) => {
 
   if (!authId && customerEmail) {
     console.log('No user_id in metaData, searching by email:', customerEmail);
-    const person = await prisma.person.findFirst({
-      where: { email: customerEmail },
-      select: { auth: { select: { id: true } } },
-    });
-    const business = !person ? await prisma.business.findFirst({
-      where: { email: customerEmail },
-      select: { auth: { select: { id: true } } },
-    }) : null;
 
-    authId = person?.auth?.id || business?.auth?.id;
+    // First try auth table directly
+    const auth = await prisma.auth.findFirst({
+      where: { email: customerEmail },
+      select: { id: true },
+    });
+    authId = auth?.id;
+
+    if (!authId) {
+      const person = await prisma.person.findFirst({
+        where: { email: customerEmail },
+        select: { auth: { select: { id: true } } },
+      });
+      const business = !person ? await prisma.business.findFirst({
+        where: { email: customerEmail },
+        select: { auth: { select: { id: true } } },
+      }) : null;
+      authId = person?.auth?.id || business?.auth?.id;
+    }
   }
 
   if (!authId) {
