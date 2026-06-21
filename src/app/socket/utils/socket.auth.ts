@@ -10,7 +10,7 @@ export const socketAuth = (socket: Socket, next: (err?: Error) => void) => {
     socket.handshake.headers.authorization;
 
   if (!authHeader) {
-    throw new ApiError(401, "Token not found");
+    return next(new ApiError(401, "Token not found"));
   }
   const token = authHeader.split("Bearer ")[1];
 
