@@ -57,7 +57,7 @@ const getWalletTransactions = async (authId: string, page: number = 1, limit: nu
 
 // Process Monnify webhook
 const processMonnifyWebhook = async (eventData: any) => {
-  const { transactionReference, amountPaid, paymentStatus, metaData } = eventData;
+  const { amountPaid, paymentStatus, metaData } = eventData;
 
   if (paymentStatus !== 'PAID') {
     return { status: 'ignored', message: 'Payment not completed' };
@@ -122,7 +122,7 @@ const withdrawFunds = async (
   authId: string,
   data: { amount: number; bankCode: string; accountNumber: string; accountName: string }
 ) => {
-  const { amount, bankCode, accountNumber, accountName } = data;
+  const { amount } = data;
 
   if (!amount || amount < 1000) throw new ApiError(400, 'Minimum withdrawal amount is ₦1,000');
 

@@ -28,9 +28,8 @@ const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
 // Get offers for a chat
 const getByChatId = handleAsyncRequest(
   async (req: TRequest, res: Response) => {
-    const { chatId } = req.params;
+    const chatId = req.params.chatId as string;
     const offers = await offerService.getByChatId(chatId);
-
     sendResponse(res, {
       message: "Offers retrieved successfully!",
       data: offers,
@@ -40,9 +39,8 @@ const getByChatId = handleAsyncRequest(
 
 // Get a single offer
 const getById = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const offer = await offerService.getById(id);
-
   sendResponse(res, {
     message: "Offer retrieved successfully!",
     data: offer,
@@ -51,11 +49,9 @@ const getById = handleAsyncRequest(async (req: TRequest, res: Response) => {
 
 // Accept an offer
 const accept = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const userId = req.user!.id;
-
   const offer = await offerService.accept(id, userId);
-
   sendResponse(res, {
     message: "Offer accepted successfully!",
     data: offer,
@@ -64,11 +60,9 @@ const accept = handleAsyncRequest(async (req: TRequest, res: Response) => {
 
 // Decline an offer
 const decline = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const userId = req.user!.id;
-
   const offer = await offerService.decline(id, userId);
-
   sendResponse(res, {
     message: "Offer declined successfully!",
     data: offer,
@@ -77,11 +71,9 @@ const decline = handleAsyncRequest(async (req: TRequest, res: Response) => {
 
 // Pay for an offer
 const pay = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const userId = req.user!.id;
-
   const offer = await offerService.pay(id, userId);
-
   sendResponse(res, {
     message: "Payment processed successfully!",
     data: offer,
