@@ -59,6 +59,12 @@ router.patch(
   postController.changePostStatus
 );
 
+router.patch(
+  "/view/:id",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  postController.incrementView
+);
+
 router.delete(
   "/:id",
   authorize(UserRole.PERSON, UserRole.BUSINESS),

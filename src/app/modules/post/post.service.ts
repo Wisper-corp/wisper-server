@@ -661,6 +661,29 @@ const deletePost = async (id: string, userId: string) => {
   return result;
 };
 
+const incrementView = async (postId: string, userId: string) => {
+  // Increment the view count - we don't count the post owner's own views
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { authId: true, views: true },
+  });
+
+  if (!post) throw new ApiError(404, "Post not found");
+
+  // Don't count views from the post owner
+  if (post.authId === userId) {
+    return { views: post.views };
+  }
+
+  const updated = await prisma.post.update({
+    where: { id: postId },
+    data: { views: { increment: 1 } },
+    select: { views: true },
+  });
+
+  return { views: updated.views };
+};
+
 export const PostService = {
   create,
   getFeedPosts,
@@ -672,4 +695,5 @@ export const PostService = {
   updateCommentAccess,
   changePostStatus,
   deletePost,
+  incrementView,
 };

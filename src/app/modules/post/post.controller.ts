@@ -117,6 +117,17 @@ const changePostStatus = handleAsyncRequest(async (req: TRequest, res) => {
   });
 });
 
+const incrementView = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await PostService.incrementView(
+    req.params.id as string,
+    req.user!.id
+  );
+  sendResponse(res, {
+    message: "View counted!",
+    data: result,
+  });
+});
+
 export const postController = {
   create,
   getFeedPosts,
@@ -128,4 +139,5 @@ export const postController = {
   updateCommentAccess,
   changePostStatus,
   deletePost,
+  incrementView,
 };
