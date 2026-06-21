@@ -77,18 +77,17 @@ const processMonnifyWebhook = async (eventData: any) => {
   let authId = metaData?.user_id || metaData?.userId;
 
   if (!authId && customerEmail) {
-    // Fallback: find user by email
     console.log('No user_id in metaData, searching by email:', customerEmail);
     const person = await prisma.person.findFirst({
       where: { email: customerEmail },
-      select: { authId: true },
+      select: { auth: { select: { id: true } } },
     });
     const business = !person ? await prisma.business.findFirst({
       where: { email: customerEmail },
-      select: { authId: true },
+      select: { auth: { select: { id: true } } },
     }) : null;
 
-    authId = person?.authId || business?.authId;
+    authId = person?.auth?.id || business?.auth?.id;
   }
 
   if (!authId) {
