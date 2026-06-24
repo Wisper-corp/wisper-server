@@ -5,11 +5,18 @@ import { sendEmail } from "../../utils/sendEmail";
 import ApiError from "../../middlewares/classes/ApiError";
 import bcrypt from "bcrypt";
 import { TVerifyOtpInput } from "./otp.validation";
+import jsonwebtoken, { Secret } from "jsonwebtoken";
+import config from "../../config";
 
 const verifyOtp = async (payload: TVerifyOtpInput) => {
-  await prisma.auth.findUniqueOrThrow({
+  const auth = await prisma.auth.findUniqueOrThrow({
     where: {
       email: payload.email,
+    },
+    select: {
+      id: true,
+      email: true,
+      role: true,
     },
   });
 
@@ -46,7 +53,7 @@ const verifyOtp = async (payload: TVerifyOtpInput) => {
     throw new ApiError(400, "Invalid OTP! Please try again!");
   }
 
-  const result = await prisma.$transaction(async tn => {
+  await prisma.$transaction(async tn => {
     if (payload.verifyAccount) {
       const updatedAuth = await tn.auth.update({
         where: {
@@ -91,7 +98,21 @@ const verifyOtp = async (payload: TVerifyOtpInput) => {
     }
   });
 
-  return result;
+  const jwtPayload = {
+    email: auth.email,
+    role: auth.role,
+    id: auth.id,
+  };
+
+  const accessToken = jsonwebtoken.sign(
+    jwtPayload,
+    config.jwt.accessSecret as Secret,
+    {
+      expiresIn: config.jwt.accessExpiration as any,
+    }
+  );
+
+  return { accessToken };
 };
 
 const sendOtp = async (email: string) => {
