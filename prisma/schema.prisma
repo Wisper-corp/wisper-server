@@ -666,3 +666,11 @@ enum OfferStatus {
   DECLINED
   PAID
 }
+
+model JobTitle {
+  id    Int    @id @default(autoincrement())
+  title String @unique
+
+  @@index([title])
+  @@map("job_titles")
+}
