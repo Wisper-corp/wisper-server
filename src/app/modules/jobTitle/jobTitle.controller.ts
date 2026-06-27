@@ -5,34 +5,22 @@ import prisma from '../../utils/prisma';
 
 // GET /api/v1/job-titles/search?q=engineer&limit=20
 const searchJobTitles = handleAsyncRequest(async (req: Request, res: Response) => {
-  const q = (req.query.q as string || '').trim();
-  const limit = Math.min(parseInt(req.query.limit as string || '20'), 50);
+  const q = ((req.query.q as string) || '').trim();
+  const limit = Math.min(parseInt((req.query.limit as string) || '20'), 50);
 
   if (q.length < 2) {
-    return sendResponse(res, {
-      message: 'Job titles fetched',
-      data: [],
-    });
+    return sendResponse(res, { message: 'Job titles fetched', data: [] });
   }
 
-  const results = await prisma.jobTitle.findMany({
-    where: {
-      title: {
-        contains: q,
-        mode: 'insensitive',
-      },
-    },
-    orderBy: [
-      // Exact start match first, then contains
-      { title: 'asc' },
-    ],
+  const results = await (prisma as any).jobTitle.findMany({
+    where: { title: { contains: q, mode: 'insensitive' } },
     take: limit,
     select: { title: true },
   });
 
-  // Sort: titles that START with query come first
+  // Titles starting with query come first
   const qLower = q.toLowerCase();
-  const sorted = results.sort((a, b) => {
+  const sorted = results.sort((a: any, b: any) => {
     const aStarts = a.title.toLowerCase().startsWith(qLower);
     const bStarts = b.title.toLowerCase().startsWith(qLower);
     if (aStarts && !bStarts) return -1;
@@ -42,7 +30,7 @@ const searchJobTitles = handleAsyncRequest(async (req: Request, res: Response) =
 
   return sendResponse(res, {
     message: 'Job titles fetched',
-    data: sorted.map(r => r.title),
+    data: sorted.map((r: any) => r.title),
   });
 });
 
