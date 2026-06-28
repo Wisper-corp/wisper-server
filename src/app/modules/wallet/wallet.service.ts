@@ -233,15 +233,15 @@ const withdrawFunds = async (
 
   // Step 3: Check if OTP authorization is required (Monnify 2FA enabled)
   if (monnifyStatus === 'PENDING_AUTHORIZATION') {
-    const authorizationCode = responseBody.authorizationCode || '';
-    console.log('Monnify requires OTP authorization. Reference:', reference, 'AuthCode:', authorizationCode);
+    console.log('Monnify requires OTP authorization. Reference:', reference);
 
     // Do NOT deduct balance yet — wait for OTP confirmation
+    // NOTE: Monnify does not return an authorizationCode in this response.
+    // The user's OTP (from email) IS used directly as the authorizationCode in validate-otp.
     return {
       status: 'PENDING_OTP',
-      message: 'An OTP has been sent to your registered email. Please enter it to complete the withdrawal.',
+      message: 'An OTP has been sent to the registered Monnify email. Please enter it to complete the withdrawal.',
       reference,
-      authorizationCode,
       amount,
     };
   }
@@ -275,15 +275,15 @@ const withdrawFunds = async (
 };
 
 // Authorize withdrawal with OTP - called after user enters the OTP from email
+// Monnify uses the OTP itself as the "authorizationCode" in the validate-otp request
 const authorizeWithdrawal = async (
   authId: string,
-  data: { reference: string; otp: string; authorizationCode: string; amount: number }
+  data: { reference: string; otp: string; amount: number }
 ) => {
-  const { reference, otp, authorizationCode, amount } = data;
+  const { reference, otp, amount } = data;
 
   if (!reference) throw new ApiError(400, 'Reference is required');
   if (!otp) throw new ApiError(400, 'OTP is required');
-  if (!authorizationCode) throw new ApiError(400, 'Authorization code is required');
   if (!amount || amount <= 0) throw new ApiError(400, 'Amount is required');
 
   const wallet = await prisma.wallet.findUnique({ where: { authId } });
@@ -304,8 +304,7 @@ const authorizeWithdrawal = async (
     },
     body: JSON.stringify({
       reference,
-      authorizationCode,
-      otp,
+      authorizationCode: otp,  // Monnify uses the OTP from email as the authorizationCode
     }),
   });
 

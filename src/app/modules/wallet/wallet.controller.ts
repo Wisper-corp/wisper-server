@@ -76,8 +76,8 @@ const withdrawFunds = handleAsyncRequest(async (req: TRequest, res: Response) =>
 // Authorize withdrawal with OTP
 const authorizeWithdrawal = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const authId = req.user!.id;
-  const { reference, otp, authorizationCode, amount } = req.body;
-  const result = await walletService.authorizeWithdrawal(authId, { reference, otp, authorizationCode, amount });
+  const { reference, otp, amount } = req.body;
+  const result = await walletService.authorizeWithdrawal(authId, { reference, otp, amount });
   sendResponse(res, {
     message: 'Withdrawal authorized successfully',
     data: result,
