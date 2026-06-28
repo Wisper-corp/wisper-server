@@ -179,7 +179,7 @@ const withdrawFunds = async (
   const monnifyApiKey = process.env.MONNIFY_API_KEY!;
   const monnifySecretKey = process.env.MONNIFY_SECRET_KEY!;
   const monnifyBaseUrl = process.env.MONNIFY_BASE_URL || 'https://api.monnify.com';
-  const contractCode = process.env.MONNIFY_CONTRACT_CODE!;
+  const sourceAccountNumber = process.env.MONNIFY_SOURCE_CODE!;  // Wallet account number from Monnify dashboard
 
   const credentials = Buffer.from(`${monnifyApiKey}:${monnifySecretKey}`).toString('base64');
   const authRes = await fetch(`${monnifyBaseUrl}/api/v1/auth/login`, {
@@ -206,8 +206,9 @@ const withdrawFunds = async (
       narration: 'Wisper Wallet Withdrawal',
       destinationBankCode: bankCode,
       destinationAccountNumber: accountNumber,
-      currency: 'NGN',
       destinationAccountName: accountName,
+      currency: 'NGN',
+      sourceAccountNumber,
     }),
   });
 
