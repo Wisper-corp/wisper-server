@@ -207,7 +207,6 @@ const withdrawFunds = async (
       destinationBankCode: bankCode,
       destinationAccountNumber: accountNumber,
       currency: 'NGN',
-      sourceAccountNumber: contractCode,
       destinationAccountName: accountName,
     }),
   });
