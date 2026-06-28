@@ -66,7 +66,20 @@ const withdrawFunds = handleAsyncRequest(async (req: TRequest, res: Response) =>
   const { amount, bankCode, accountNumber, accountName } = req.body;
   const result = await walletService.withdrawFunds(authId, { amount, bankCode, accountNumber, accountName });
   sendResponse(res, {
-    message: 'Withdrawal request submitted successfully',
+    message: result.status === 'PENDING_OTP'
+      ? 'OTP sent to your email. Please enter it to complete the withdrawal.'
+      : 'Withdrawal request submitted successfully',
+    data: result,
+  });
+});
+
+// Authorize withdrawal with OTP
+const authorizeWithdrawal = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const authId = req.user!.id;
+  const { reference, otp, authorizationCode, amount } = req.body;
+  const result = await walletService.authorizeWithdrawal(authId, { reference, otp, authorizationCode, amount });
+  sendResponse(res, {
+    message: 'Withdrawal authorized successfully',
     data: result,
   });
 });
@@ -96,4 +109,5 @@ export const walletController = {
   monnifyDisbursementWebhook,
   initializeMonnifyPayment,
   withdrawFunds,
+  authorizeWithdrawal,
 };
