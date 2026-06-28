@@ -12,5 +12,6 @@ router.post('/withdraw', authorize(), walletController.withdrawFunds);
 
 // Public webhook route (no auth required)
 router.post('/monnify/webhook', walletController.monnifyWebhook);
+router.post('/monnify/disbursement-webhook', walletController.monnifyDisbursementWebhook);
 
 export const walletRoutes = router;

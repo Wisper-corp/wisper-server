@@ -71,10 +71,29 @@ const withdrawFunds = handleAsyncRequest(async (req: TRequest, res: Response) =>
   });
 });
 
+// Monnify disbursement webhook - handles SUCCESSFUL_DISBURSEMENT / FAILED_DISBURSEMENT
+const monnifyDisbursementWebhook = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const { eventType, eventData } = req.body;
+  console.log('Monnify Disbursement Webhook:', JSON.stringify({ eventType, ref: eventData?.reference }));
+
+  // Respond 200 immediately
+  res.status(200).json({ success: true });
+
+  if (eventType === 'FAILED_DISBURSEMENT' && eventData) {
+    try {
+      const reference = eventData.reference;
+      console.log('Disbursement failed for reference:', reference);
+    } catch (err: any) {
+      console.error('Error handling failed disbursement:', err?.message);
+    }
+  }
+});
+
 export const walletController = {
   getWalletBalance,
   getWalletTransactions,
   monnifyWebhook,
+  monnifyDisbursementWebhook,
   initializeMonnifyPayment,
   withdrawFunds,
 };
