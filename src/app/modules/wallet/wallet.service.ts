@@ -159,19 +159,67 @@ const initializeMonnifyPayment = async (authId: string, amount: number) => {
   return { transactionReference, amount, email, name, user_id: authId };
 };
 
-// Withdraw funds
+// Withdraw funds - calls Monnify Disbursement API
 const withdrawFunds = async (
   authId: string,
   data: { amount: number; bankCode: string; accountNumber: string; accountName: string }
 ) => {
-  const { amount } = data;
+  const { amount, bankCode, accountNumber, accountName } = data;
 
   if (!amount || amount < 1000) throw new ApiError(400, 'Minimum withdrawal amount is ₦1,000');
+  if (!bankCode) throw new ApiError(400, 'Bank code is required');
+  if (!accountNumber) throw new ApiError(400, 'Account number is required');
+  if (!accountName) throw new ApiError(400, 'Account name is required');
 
   const wallet = await prisma.wallet.findUnique({ where: { authId } });
   if (!wallet) throw new ApiError(404, 'Wallet not found');
   if (wallet.balance < amount) throw new ApiError(400, 'Insufficient balance');
 
+  // Step 1: Get Monnify access token
+  const monnifyApiKey = process.env.MONNIFY_API_KEY!;
+  const monnifySecretKey = process.env.MONNIFY_SECRET_KEY!;
+  const monnifyBaseUrl = process.env.MONNIFY_BASE_URL || 'https://api.monnify.com';
+  const contractCode = process.env.MONNIFY_CONTRACT_CODE!;
+
+  const credentials = Buffer.from(`${monnifyApiKey}:${monnifySecretKey}`).toString('base64');
+  const authRes = await fetch(`${monnifyBaseUrl}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/json' },
+  });
+
+  if (!authRes.ok) throw new ApiError(500, 'Failed to authenticate with Monnify');
+  const authData = await authRes.json() as any;
+  const accessToken = authData.responseBody?.accessToken;
+  if (!accessToken) throw new ApiError(500, 'Failed to get Monnify access token');
+
+  // Step 2: Initiate disbursement
+  const reference = `WSPR_WD_${Date.now()}_${authId.slice(0, 8)}`;
+  const disbursementRes = await fetch(`${monnifyBaseUrl}/api/v2/disbursements/single`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      amount,
+      reference,
+      narration: 'Wisper Wallet Withdrawal',
+      destinationBankCode: bankCode,
+      destinationAccountNumber: accountNumber,
+      currency: 'NGN',
+      sourceAccountNumber: contractCode,
+      destinationAccountName: accountName,
+    }),
+  });
+
+  const disbursementData = await disbursementRes.json() as any;
+  console.log('Monnify disbursement response:', JSON.stringify(disbursementData));
+
+  if (!disbursementRes.ok || disbursementData.requestSuccessful === false) {
+    throw new ApiError(400, disbursementData.responseMessage || 'Monnify disbursement failed');
+  }
+
+  // Step 3: Deduct balance and record transaction
   const transaction = await prisma.$transaction(async (tx) => {
     await tx.wallet.update({
       where: { id: wallet.id },
@@ -191,8 +239,10 @@ const withdrawFunds = async (
   });
 
   return {
-    message: 'Withdrawal request submitted. Processing within 24 hours.',
+    message: 'Withdrawal successful! Money will be in your account shortly.',
+    reference,
     transaction,
+    monnifyStatus: disbursementData.responseBody?.status || 'PROCESSING',
   };
 };
 
