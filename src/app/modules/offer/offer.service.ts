@@ -214,7 +214,7 @@ const accept = async (id: string, userId: string) => {
   return updatedOffer;
 };
 
-// Decline an offer
+// Decline an offer — receiver can decline, sender can cancel (both set status to DECLINED)
 const decline = async (id: string, userId: string) => {
   const offer = await prisma.offer.findUnique({
     where: { id },
@@ -224,7 +224,8 @@ const decline = async (id: string, userId: string) => {
     throw new ApiError(404, "Offer not found");
   }
 
-  if (offer.receiverId !== userId) {
+  // Allow both the sender (cancel) and receiver (decline) to decline a pending offer
+  if (offer.receiverId !== userId && offer.senderId !== userId) {
     throw new ApiError(403, "You are not authorized to decline this offer");
   }
 
