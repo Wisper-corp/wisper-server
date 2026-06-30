@@ -7,6 +7,7 @@ export const CreatePostZod = z.object({
     message: "Comment access must be either FOLLOWERS or EVERYONE",
   }),
   price: z.number().positive().optional(),
+  deliveryTime: z.string().optional(),
 });
 
 export type TCreatePost = z.infer<typeof CreatePostZod> & {
