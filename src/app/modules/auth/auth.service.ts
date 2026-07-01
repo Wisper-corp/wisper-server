@@ -82,6 +82,8 @@ const login = async (payload: TLoginInput) => {
     });
   }
 
+  await addUserToGeneralChat(prisma, auth.id);
+
   return {
     accessToken,
     refreshToken,
