@@ -660,6 +660,85 @@ const incrementView = async (postId: string, userId: string) => {
   return { views: updated.views };
 };
 
+// Search Gig Market posts by job title (author's title) or caption
+const searchGigMarket = async (
+  userId: string,
+  searchQuery: string,
+  options: TPaginationOptions
+) => {
+  const { page, take, skip } = calculatePagination(options);
+
+  const whereConditions: Prisma.PostWhereInput = {
+    status: PostStatus.ACTIVE,
+    // Only posts with images (marketplace posts)
+    images: { isEmpty: false },
+    OR: [
+      // Match caption
+      {
+        caption: {
+          contains: searchQuery,
+          mode: 'insensitive',
+        },
+      },
+      // Match author's job title (person)
+      {
+        author: {
+          person: {
+            title: {
+              contains: searchQuery,
+              mode: 'insensitive',
+            },
+          },
+        },
+      },
+      // Match author's business industry
+      {
+        author: {
+          business: {
+            industry: {
+              contains: searchQuery,
+              mode: 'insensitive',
+            },
+          },
+        },
+      },
+    ],
+  };
+
+  const [posts, total] = await Promise.all([
+    prisma.post.findMany({
+      where: whereConditions,
+      select: {
+        id: true,
+        caption: true,
+        images: true,
+        views: true,
+        price: true,
+        deliveryTime: true,
+        createdAt: true,
+        commentAccess: true,
+        author: {
+          select: {
+            id: true,
+            person: {
+              select: { id: true, name: true, title: true, image: true },
+            },
+            business: {
+              select: { id: true, name: true, industry: true, image: true },
+            },
+          },
+        },
+      },
+      skip,
+      take,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.post.count({ where: whereConditions }),
+  ]);
+
+  return { meta: { page, limit: take, total }, posts };
+};
+
 export const PostService = {
   create,
   getFeedPosts,
@@ -672,4 +751,5 @@ export const PostService = {
   changePostStatus,
   deletePost,
   incrementView,
+  searchGigMarket,
 };

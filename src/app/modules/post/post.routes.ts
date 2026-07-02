@@ -59,6 +59,12 @@ router.patch(
   postController.changePostStatus
 );
 
+router.get(
+  "/search/gig-market",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  postController.searchGigMarket
+);
+
 router.patch(
   "/view/:id",
   authorize(UserRole.PERSON, UserRole.BUSINESS),
