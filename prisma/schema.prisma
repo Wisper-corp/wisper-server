@@ -86,7 +86,7 @@ model Person {
   auth            Auth     @relation(fields: [email], references: [email])
   name            String
   phone           String?
-  industry        String
+  industry        String?
   image           String?
   title           String?
   defaultResumeId String?  @unique

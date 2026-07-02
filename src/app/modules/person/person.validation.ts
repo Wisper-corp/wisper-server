@@ -10,9 +10,7 @@ export const personSignupZod = z.object({
     title: z
       .string({ message: "Title is required" })
       .min(4, "Title is too short"),
-    industry: z
-      .string({ message: "Industry is required" })
-      .min(2, "Industry is required"),
+    industry: z.string().optional(),
   }),
 });
 
