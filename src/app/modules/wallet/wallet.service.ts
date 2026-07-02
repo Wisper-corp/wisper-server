@@ -159,19 +159,94 @@ const initializeMonnifyPayment = async (authId: string, amount: number) => {
   return { transactionReference, amount, email, name, user_id: authId };
 };
 
-// Withdraw funds
+// Helper: get Monnify access token
+const getMonnifyToken = async (): Promise<string> => {
+  const monnifyApiKey = process.env.MONNIFY_API_KEY!;
+  const monnifySecretKey = process.env.MONNIFY_SECRET_KEY!;
+  const monnifyBaseUrl = process.env.MONNIFY_BASE_URL || 'https://api.monnify.com';
+
+  const credentials = Buffer.from(`${monnifyApiKey}:${monnifySecretKey}`).toString('base64');
+  const authRes = await fetch(`${monnifyBaseUrl}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/json' },
+  });
+
+  if (!authRes.ok) throw new ApiError(500, 'Failed to authenticate with Monnify');
+  const authData = await authRes.json() as any;
+  const accessToken = authData.responseBody?.accessToken;
+  if (!accessToken) throw new ApiError(500, 'Failed to get Monnify access token');
+  return accessToken;
+};
+
+// Withdraw funds - calls Monnify Disbursement API
+// Returns PENDING_OTP when Monnify requires OTP authorization (2FA enabled on account)
 const withdrawFunds = async (
   authId: string,
   data: { amount: number; bankCode: string; accountNumber: string; accountName: string }
 ) => {
-  const { amount } = data;
+  const { amount, bankCode, accountNumber, accountName } = data;
 
   if (!amount || amount < 1000) throw new ApiError(400, 'Minimum withdrawal amount is ₦1,000');
+  if (!bankCode) throw new ApiError(400, 'Bank code is required');
+  if (!accountNumber) throw new ApiError(400, 'Account number is required');
+  if (!accountName) throw new ApiError(400, 'Account name is required');
 
   const wallet = await prisma.wallet.findUnique({ where: { authId } });
   if (!wallet) throw new ApiError(404, 'Wallet not found');
   if (wallet.balance < amount) throw new ApiError(400, 'Insufficient balance');
 
+  const monnifyBaseUrl = process.env.MONNIFY_BASE_URL || 'https://api.monnify.com';
+  const sourceAccountNumber = process.env.MONNIFY_SOURCE_CODE!;
+
+  // Step 1: Get access token
+  const accessToken = await getMonnifyToken();
+
+  // Step 2: Initiate disbursement
+  const reference = `WSPR_WD_${Date.now()}_${authId.slice(0, 8)}`;
+  const disbursementRes = await fetch(`${monnifyBaseUrl}/api/v2/disbursements/single`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      amount,
+      reference,
+      narration: 'Wisper Wallet Withdrawal',
+      destinationBankCode: bankCode,
+      destinationAccountNumber: accountNumber,
+      destinationAccountName: accountName,
+      currency: 'NGN',
+      sourceAccountNumber,
+    }),
+  });
+
+  const disbursementData = await disbursementRes.json() as any;
+  console.log('Monnify disbursement response:', JSON.stringify(disbursementData));
+
+  if (!disbursementRes.ok || disbursementData.requestSuccessful === false) {
+    throw new ApiError(400, disbursementData.responseMessage || 'Monnify disbursement failed');
+  }
+
+  const responseBody = disbursementData.responseBody || {};
+  const monnifyStatus = responseBody.status || '';
+
+  // Step 3: Check if OTP authorization is required (Monnify 2FA enabled)
+  if (monnifyStatus === 'PENDING_AUTHORIZATION') {
+    console.log('Monnify requires OTP authorization. Reference:', reference);
+
+    // Do NOT deduct balance yet — wait for OTP confirmation
+    // NOTE: Monnify does not return an authorizationCode in this response.
+    // The user's OTP (from email) IS used directly as the authorizationCode in validate-otp.
+    return {
+      status: 'PENDING_OTP',
+      message: 'An OTP has been sent to the registered Monnify email. Please enter it to complete the withdrawal.',
+      reference,
+      amount,
+    };
+  }
+
+  // Step 4: If no OTP needed, deduct balance and record transaction immediately
   const transaction = await prisma.$transaction(async (tx) => {
     await tx.wallet.update({
       where: { id: wallet.id },
@@ -191,8 +266,89 @@ const withdrawFunds = async (
   });
 
   return {
-    message: 'Withdrawal request submitted. Processing within 24 hours.',
+    status: 'SUCCESS',
+    message: 'Withdrawal successful! Money will be in your account shortly.',
+    reference,
     transaction,
+    monnifyStatus,
+  };
+};
+
+// Authorize withdrawal with OTP - called after user enters the OTP from email
+// Monnify uses the OTP itself as the "authorizationCode" in the validate-otp request
+const authorizeWithdrawal = async (
+  authId: string,
+  data: { reference: string; otp: string; amount: number }
+) => {
+  const { reference, otp, amount } = data;
+
+  if (!reference) throw new ApiError(400, 'Reference is required');
+  if (!otp) throw new ApiError(400, 'OTP is required');
+  if (!amount || amount <= 0) throw new ApiError(400, 'Amount is required');
+
+  const wallet = await prisma.wallet.findUnique({ where: { authId } });
+  if (!wallet) throw new ApiError(404, 'Wallet not found');
+  if (wallet.balance < amount) throw new ApiError(400, 'Insufficient balance');
+
+  const monnifyBaseUrl = process.env.MONNIFY_BASE_URL || 'https://api.monnify.com';
+
+  // Step 1: Get fresh access token
+  const accessToken = await getMonnifyToken();
+
+  // Step 2: Submit OTP to Monnify validate-otp endpoint
+  const validateRes = await fetch(`${monnifyBaseUrl}/api/v2/disbursements/single/validate-otp`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      reference,
+      authorizationCode: otp,  // Monnify uses the OTP from email as the authorizationCode
+    }),
+  });
+
+  const validateData = await validateRes.json() as any;
+  console.log('Monnify OTP validation response:', JSON.stringify(validateData));
+
+  if (!validateRes.ok || validateData.requestSuccessful === false) {
+    throw new ApiError(400, validateData.responseMessage || 'OTP validation failed. Please try again.');
+  }
+
+  const responseBody = validateData.responseBody || {};
+  const monnifyStatus = responseBody.status || '';
+
+  if (monnifyStatus !== 'SUCCESS' && monnifyStatus !== 'PENDING') {
+    throw new ApiError(400, `Withdrawal not approved by Monnify (status: ${monnifyStatus})`);
+  }
+
+  // Step 3: OTP accepted — deduct balance and record transaction
+  const transaction = await prisma.$transaction(async (tx) => {
+    await tx.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { decrement: amount } },
+    });
+
+    const txn = await tx.transaction.create({
+      data: {
+        walletId: wallet.id,
+        type: 'WITHDRAW',
+        amount,
+        date: new Date(),
+      },
+    });
+
+    return txn;
+  });
+
+  console.log('Withdrawal authorized and balance deducted for user:', authId, 'amount:', amount);
+
+  return {
+    status: 'SUCCESS',
+    message: 'Withdrawal successful! Money will be in your account shortly.',
+    reference,
+    transaction,
+    monnifyStatus,
   };
 };
 
@@ -202,4 +358,5 @@ export const walletService = {
   processMonnifyWebhook,
   initializeMonnifyPayment,
   withdrawFunds,
+  authorizeWithdrawal,
 };

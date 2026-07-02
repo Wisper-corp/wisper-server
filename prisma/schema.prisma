@@ -123,6 +123,7 @@ model Post {
   isSponsored   Boolean       @default(false)
   commentAccess CommentAccess
   price         Float?
+  deliveryTime  String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   comment       Comment[]
@@ -665,4 +666,12 @@ enum OfferStatus {
   ACCEPTED
   DECLINED
   PAID
+}
+
+model JobTitle {
+  id    Int    @id @default(autoincrement())
+  title String @unique
+
+  @@index([title])
+  @@map("job_titles")
 }

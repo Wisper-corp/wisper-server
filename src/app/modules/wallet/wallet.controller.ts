@@ -66,15 +66,48 @@ const withdrawFunds = handleAsyncRequest(async (req: TRequest, res: Response) =>
   const { amount, bankCode, accountNumber, accountName } = req.body;
   const result = await walletService.withdrawFunds(authId, { amount, bankCode, accountNumber, accountName });
   sendResponse(res, {
-    message: 'Withdrawal request submitted successfully',
+    message: result.status === 'PENDING_OTP'
+      ? 'OTP sent to your email. Please enter it to complete the withdrawal.'
+      : 'Withdrawal request submitted successfully',
     data: result,
   });
+});
+
+// Authorize withdrawal with OTP
+const authorizeWithdrawal = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const authId = req.user!.id;
+  const { reference, otp, amount } = req.body;
+  const result = await walletService.authorizeWithdrawal(authId, { reference, otp, amount });
+  sendResponse(res, {
+    message: 'Withdrawal authorized successfully',
+    data: result,
+  });
+});
+
+// Monnify disbursement webhook - handles SUCCESSFUL_DISBURSEMENT / FAILED_DISBURSEMENT
+const monnifyDisbursementWebhook = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const { eventType, eventData } = req.body;
+  console.log('Monnify Disbursement Webhook:', JSON.stringify({ eventType, ref: eventData?.reference }));
+
+  // Respond 200 immediately
+  res.status(200).json({ success: true });
+
+  if (eventType === 'FAILED_DISBURSEMENT' && eventData) {
+    try {
+      const reference = eventData.reference;
+      console.log('Disbursement failed for reference:', reference);
+    } catch (err: any) {
+      console.error('Error handling failed disbursement:', err?.message);
+    }
+  }
 });
 
 export const walletController = {
   getWalletBalance,
   getWalletTransactions,
   monnifyWebhook,
+  monnifyDisbursementWebhook,
   initializeMonnifyPayment,
   withdrawFunds,
+  authorizeWithdrawal,
 };

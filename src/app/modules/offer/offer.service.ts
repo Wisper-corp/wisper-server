@@ -152,7 +152,9 @@ const getById = async (id: string) => {
   return offer;
 };
 
-// Accept an offer
+// Accept an offer — deducts amount from receiver's wallet and credits sender's wallet
+// The wallet balance represents real money the user deposited via Monnify
+// This is an internal Wisper wallet-to-wallet transfer (no external Monnify disbursement needed)
 const accept = async (id: string, userId: string) => {
   const offer = await prisma.offer.findUnique({
     where: { id },
@@ -170,51 +172,96 @@ const accept = async (id: string, userId: string) => {
     throw new ApiError(400, "Offer is no longer pending");
   }
 
-  const updatedOffer = await prisma.offer.update({
-    where: { id },
-    data: { status: OfferStatus.ACCEPTED },
-    include: {
-      sender: {
-        select: {
-          id: true,
-          person: {
-            select: {
-              name: true,
-              image: true,
-            },
-          },
-          business: {
-            select: {
-              name: true,
-              image: true,
-            },
-          },
-        },
-      },
-      receiver: {
-        select: {
-          id: true,
-          person: {
-            select: {
-              name: true,
-              image: true,
-            },
-          },
-          business: {
-            select: {
-              name: true,
-              image: true,
-            },
-          },
-        },
-      },
-    },
+  // Get receiver's (buyer's) wallet — they pay
+  const receiverWallet = await prisma.wallet.findUnique({
+    where: { authId: userId },
   });
 
-  return updatedOffer;
+  if (!receiverWallet) {
+    throw new ApiError(404, "Your wallet not found. Please fund your wallet first.");
+  }
+
+  if (receiverWallet.balance < offer.amount) {
+    throw new ApiError(400, `Insufficient wallet balance. You need ₦${offer.amount} but have ₦${receiverWallet.balance}`);
+  }
+
+  // Get sender's (seller's) wallet — they receive payment
+  let senderWallet = await prisma.wallet.findUnique({
+    where: { authId: offer.senderId },
+  });
+
+  // Auto-create sender wallet if it doesn't exist
+  if (!senderWallet) {
+    senderWallet = await prisma.wallet.create({
+      data: { authId: offer.senderId, balance: 0 },
+    });
+  }
+
+  // Atomically: deduct from receiver, credit sender, mark offer ACCEPTED+PAID
+  const result = await prisma.$transaction(async (tx) => {
+    // Deduct from receiver (buyer)
+    await tx.wallet.update({
+      where: { id: receiverWallet.id },
+      data: { balance: { decrement: offer.amount } },
+    });
+
+    // Credit sender (seller)
+    await tx.wallet.update({
+      where: { id: senderWallet!.id },
+      data: { balance: { increment: offer.amount } },
+    });
+
+    // Record transaction for buyer (SPEND)
+    await tx.transaction.create({
+      data: {
+        walletId: receiverWallet.id,
+        type: 'SPEND',
+        amount: offer.amount,
+        date: new Date(),
+      },
+    });
+
+    // Record transaction for seller (DEPOSIT)
+    await tx.transaction.create({
+      data: {
+        walletId: senderWallet!.id,
+        type: 'DEPOSIT',
+        amount: offer.amount,
+        date: new Date(),
+      },
+    });
+
+    // Mark offer as PAID (accepted + paid in one step)
+    const updatedOffer = await tx.offer.update({
+      where: { id },
+      data: { status: OfferStatus.PAID },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            person: { select: { name: true, image: true } },
+            business: { select: { name: true, image: true } },
+          },
+        },
+        receiver: {
+          select: {
+            id: true,
+            person: { select: { name: true, image: true } },
+            business: { select: { name: true, image: true } },
+          },
+        },
+      },
+    });
+
+    return updatedOffer;
+  });
+
+  console.log(`Offer ${id} accepted+paid: ₦${offer.amount} moved from ${userId} → ${offer.senderId}`);
+
+  return result;
 };
 
-// Decline an offer
+// Decline an offer — receiver can decline, sender can cancel (both set status to DECLINED)
 const decline = async (id: string, userId: string) => {
   const offer = await prisma.offer.findUnique({
     where: { id },
@@ -224,7 +271,8 @@ const decline = async (id: string, userId: string) => {
     throw new ApiError(404, "Offer not found");
   }
 
-  if (offer.receiverId !== userId) {
+  // Allow both the sender (cancel) and receiver (decline) to decline a pending offer
+  if (offer.receiverId !== userId && offer.senderId !== userId) {
     throw new ApiError(403, "You are not authorized to decline this offer");
   }
 
