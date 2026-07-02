@@ -28,6 +28,7 @@ import { paymentRoutes } from "../modules/payment/payment.routes";
 import { walletRoutes } from "../modules/wallet/wallet.routes";
 import { offerRoutes } from "../modules/offer/offer.routes";
 import { jobTitleRoutes } from "../modules/jobTitle/jobTitle.routes";
+import { industryRoutes } from "../modules/industry/industry.routes";
 
 const router = Router();
 
@@ -59,6 +60,7 @@ const routes = [
   { path: "/wallet", route: walletRoutes },
   { path: "/offers", route: offerRoutes },
   { path: "/job-titles", route: jobTitleRoutes },
+  { path: "/industries", route: industryRoutes },
 
   { path: "/admins", route: adminRoutes },
   { path: "/upload-files", route: fileRoutes },

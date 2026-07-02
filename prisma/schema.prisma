@@ -675,3 +675,13 @@ model JobTitle {
   @@index([title])
   @@map("job_titles")
 }
+
+model Industry {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  sector   String    // Parent sector e.g. "Technology"
+
+  @@index([name])
+  @@index([sector])
+  @@map("industries")
+}
