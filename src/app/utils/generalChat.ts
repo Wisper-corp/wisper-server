@@ -9,7 +9,7 @@ export const addUserToGeneralChat = async (
 ) => {
   const generalChatId = config.generalChatId;
   if (!generalChatId) return;
-
+  console.log("hitting here 1");
   const generalChat = await prismaClient.chat.findUnique({
     where: {
       id: generalChatId,
@@ -20,7 +20,7 @@ export const addUserToGeneralChat = async (
   });
 
   if (!generalChat) return;
-
+  console.log("hitting here 2");
   const existingParticipant = await prismaClient.chatParticipant.findFirst({
     where: {
       chatId: generalChatId,
@@ -30,9 +30,9 @@ export const addUserToGeneralChat = async (
       id: true,
     },
   });
-
+  console.log("existingParticipant", existingParticipant);
   if (existingParticipant) return;
-
+  console.log("hitting here 3");
   await prismaClient.chatParticipant.create({
     data: {
       chatId: generalChatId,
