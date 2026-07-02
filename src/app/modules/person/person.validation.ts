@@ -10,7 +10,6 @@ export const personSignupZod = z.object({
     title: z
       .string({ message: "Title is required" })
       .min(4, "Title is too short"),
-    industry: z.string().optional(),
   }),
 });
 
@@ -20,7 +19,6 @@ export const updatePersonProfileZod = z.object({
   name: z.string().min(2, "Name is too short").optional(),
   phone: z.string().optional(),
   title: z.string().min(2, "Title is too short").optional(),
-  industry: z.string().min(2, "Industry is too short").optional(),
   address: z.string().min(2, "Address is too short").optional(),
 });
 

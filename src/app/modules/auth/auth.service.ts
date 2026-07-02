@@ -152,7 +152,6 @@ const googleLogin = async (payload: TGoogleLoginInput) => {
       jwtPayload.id = auth.id;
 
       if (payload.role === UserRole.PERSON) {
-        userData.industry = "N/A";
         await tn.person.create({
           data: userData,
         });
@@ -248,7 +247,6 @@ const getAll = async (
           image: true,
           phone: true,
           title: true,
-          industry: true,
           address: true,
         },
       },

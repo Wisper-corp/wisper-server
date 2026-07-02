@@ -78,11 +78,6 @@ const getFeedPosts = async (userId: string, options: TPaginationOptions) => {
     },
     select: {
       id: true,
-      person: {
-        select: {
-          industry: true,
-        },
-      },
       business: {
         select: {
           industry: true,
@@ -123,31 +118,15 @@ const getFeedPosts = async (userId: string, options: TPaginationOptions) => {
         in: authorIds,
       },
     });
-  } else {
+  } else if (currentAuth?.business?.industry) {
     andConditions.push({
       author: {
-        OR: [
-          {
-            person: {
-              industry: {
-                contains:
-                  currentAuth?.business?.industry ||
-                  currentAuth?.person?.industry,
-                mode: "insensitive",
-              },
-            },
+        business: {
+          industry: {
+            contains: currentAuth.business.industry,
+            mode: "insensitive",
           },
-          {
-            business: {
-              industry: {
-                contains:
-                  currentAuth?.business?.industry ||
-                  currentAuth?.person?.industry,
-                mode: "insensitive",
-              },
-            },
-          },
-        ],
+        },
       },
     });
   }
@@ -206,8 +185,7 @@ const getFeedPosts = async (userId: string, options: TPaginationOptions) => {
 
   type FeedPost = Prisma.PostGetPayload<{ select: typeof postSelect }>;
 
-  const industry =
-    currentAuth?.business?.industry || currentAuth?.person?.industry || "";
+  const industry = currentAuth?.business?.industry || "";
 
   const boostTargetFilter: Prisma.BoostWhereInput | null = industry
     ? {
@@ -327,7 +305,6 @@ const getSingle = async (id: string) => {
               image: true,
               phone: true,
               title: true,
-              industry: true,
               address: true,
             },
           },

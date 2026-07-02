@@ -107,7 +107,6 @@ const getSingle = async (id: string, currentAuthId: string) => {
           image: true,
           phone: true,
           title: true,
-          industry: true,
           address: true,
         },
       },
@@ -152,7 +151,6 @@ const getMyProfile = async (id: string) => {
           image: true,
           phone: true,
           title: true,
-          industry: true,
           defaultResume: {
             select: {
               name: true,
