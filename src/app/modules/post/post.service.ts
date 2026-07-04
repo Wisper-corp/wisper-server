@@ -146,6 +146,8 @@ const getFeedPosts = async (userId: string, options: TPaginationOptions) => {
     groupId: true,
     images: true,
     views: true,
+    price: true,
+    deliveryTime: true,
     createdAt: true,
     commentAccess: true,
     author: {
