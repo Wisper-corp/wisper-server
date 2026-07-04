@@ -184,6 +184,7 @@ model Job {
   compensationType JobCompensationType
   salary           Float
   locationType     JobLocationType
+  isScraped        Boolean         @default(false)
   location         String?
   industry         String
   qualification    JobQualification
