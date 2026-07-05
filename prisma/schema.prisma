@@ -185,6 +185,7 @@ model Job {
   salary           Float
   locationType     JobLocationType
   isScraped        Boolean         @default(false)
+  companyLogo      String?
   location         String?
   industry         String
   qualification    JobQualification
@@ -582,6 +583,7 @@ enum FileType {
   VIDEO
   AUDIO
   DOC
+  OFFER
 }
 
 enum MuteFor {

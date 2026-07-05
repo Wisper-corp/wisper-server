@@ -1,8 +1,9 @@
 import { OfferStatus } from "@prisma/client";
 import prisma from "../../utils/prisma";
+import { FileType, OfferStatus } from "@prisma/client";
 import ApiError from "../../middlewares/classes/ApiError";
 
-// Create a new offer
+// Create a new offer and store a message so chat list shows offer description
 const create = async (data: {
   senderId: string;
   receiverId: string;
@@ -11,47 +12,54 @@ const create = async (data: {
   description: string;
   duration: string;
 }) => {
-  const offer = await prisma.offer.create({
-    data: {
-      ...data,
-      status: OfferStatus.PENDING,
-    },
-    include: {
-      sender: {
-        select: {
-          id: true,
-          person: {
-            select: {
-              name: true,
-              image: true,
-            },
+  // First get the chat participant id for the sender
+  const participant = await prisma.participant.findFirst({
+    where: { chatId: data.chatId, authId: data.senderId },
+    select: { id: true },
+  });
+
+  const [offer] = await prisma.$transaction(async (tx) => {
+    // Create the offer
+    const newOffer = await tx.offer.create({
+      data: {
+        ...data,
+        status: OfferStatus.PENDING,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            person: { select: { name: true, image: true } },
+            business: { select: { name: true, image: true } },
           },
-          business: {
-            select: {
-              name: true,
-              image: true,
-            },
+        },
+        receiver: {
+          select: {
+            id: true,
+            person: { select: { name: true, image: true } },
+            business: { select: { name: true, image: true } },
           },
         },
       },
-      receiver: {
-        select: {
-          id: true,
-          person: {
-            select: {
-              name: true,
-              image: true,
-            },
-          },
-          business: {
-            select: {
-              name: true,
-              image: true,
-            },
-          },
-        },
+    });
+
+    // Create a message with the offer description so chat list shows it
+    await tx.message.create({
+      data: {
+        chatId: data.chatId,
+        senderId: data.senderId,
+        text: data.description,
+        fileType: FileType.OFFER,
       },
-    },
+    });
+
+    // Update chat latestMessageAt
+    await tx.chat.update({
+      where: { id: data.chatId },
+      data: { latestMessageAt: new Date() },
+    });
+
+    return [newOffer];
   });
 
   return offer;
