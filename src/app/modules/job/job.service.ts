@@ -132,9 +132,48 @@ const getAllJobs = async (
   const whereConditions: Prisma.JobWhereInput =
     andConditions.length > 0 ? { AND: andConditions } : {};
 
+  // Filter scraped jobs to English titles only
+  // Non-English chars: exclude jobs with common non-ASCII characters (German, French, etc.)
+  const finalWhereConditions: Prisma.JobWhereInput = {
+    AND: [
+      whereConditions,
+      {
+        OR: [
+          // User-posted jobs — always show
+          { isScraped: false },
+          { isScraped: null },
+          // Scraped jobs — only show if title has no non-Latin characters
+          // Filter out titles with German (ü,ö,ä,ß), French (é,è,ê), etc.
+          {
+            isScraped: true,
+            NOT: {
+              OR: [
+                { title: { contains: 'ü' } },
+                { title: { contains: 'ö' } },
+                { title: { contains: 'ä' } },
+                { title: { contains: 'ß' } },
+                { title: { contains: 'é' } },
+                { title: { contains: 'è' } },
+                { title: { contains: 'ê' } },
+                { title: { contains: 'ñ' } },
+                { title: { contains: 'ç' } },
+                { title: { contains: 'm/w/d' } },
+                { title: { contains: '(m/f/d)' } },
+                { title: { contains: '(f/m/d)' } },
+                { description: { contains: 'wir suchen' } },
+                { description: { contains: 'Auftrag' } },
+                { description: { contains: 'München' } },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+
   const { page, take, skip, sortBy, orderBy } = calculatePagination(options);
   const jobs = await prisma.job.findMany({
-    where: whereConditions,
+    where: finalWhereConditions,
     skip,
     take,
     orderBy: sortBy && orderBy ? { [sortBy]: orderBy } : { createdAt: "desc" },
@@ -173,7 +212,7 @@ const getAllJobs = async (
   });
 
   const total = await prisma.job.count({
-    where: whereConditions,
+    where: finalWhereConditions,
   });
 
   const meta = {
