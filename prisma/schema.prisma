@@ -186,6 +186,7 @@ model Job {
   locationType     JobLocationType
   isScraped        Boolean         @default(false)
   companyLogo      String?
+  companyName      String?
   location         String?
   industry         String
   qualification    JobQualification

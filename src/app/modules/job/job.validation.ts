@@ -18,4 +18,5 @@ export const createJobSchema = z.object({
   applicationLink: z.string().url().optional(),
   isScraped: z.boolean().optional(),
   companyLogo: z.string().url().optional(),
+  companyName: z.string().optional(),
 });
