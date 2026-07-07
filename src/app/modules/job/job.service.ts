@@ -141,7 +141,6 @@ const getAllJobs = async (
         OR: [
           // User-posted jobs — always show
           { isScraped: false },
-          { isScraped: { equals: null } },
           // Scraped jobs — only show if title has no non-Latin characters
           // Filter out titles with German (ü,ö,ä,ß), French (é,è,ê), etc.
           {
