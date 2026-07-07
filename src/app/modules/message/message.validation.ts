@@ -7,7 +7,7 @@ export const sendMessageZod = z
       .uuid({ message: "chatId is required and must be a valid UUID" }),
     text: z.string().optional(),
     file: z.string().optional(),
-    fileType: z.enum(["IMAGE", "VIDEO", "AUDIO", "DOC"]).optional(),
+    fileType: z.enum(["IMAGE", "VIDEO", "AUDIO", "DOC", "OFFER"]).optional(),
     link: z.string().optional(),
   })
   .refine(
