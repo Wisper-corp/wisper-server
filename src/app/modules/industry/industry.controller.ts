@@ -13,7 +13,7 @@ const search = handleAsyncRequest(async (req: Request, res: Response) => {
   });
 });
 
-const getSectors = handleAsyncRequest(async (req: Request, res: Response) => {
+const getSectors = handleAsyncRequest(async (_req: Request, res: Response) => {
   const sectors = await industryService.getSectors();
   sendResponse(res, {
     message: "Sectors retrieved successfully",

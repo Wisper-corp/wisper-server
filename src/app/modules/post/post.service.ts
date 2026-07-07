@@ -664,7 +664,7 @@ const incrementView = async (postId: string, userId: string) => {
 
 // Search Gig Market posts by job title (author's title) or caption
 const searchGigMarket = async (
-  userId: string,
+  _userId: string,
   searchQuery: string,
   options: TPaginationOptions
 ) => {

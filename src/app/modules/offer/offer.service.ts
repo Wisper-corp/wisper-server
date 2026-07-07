@@ -1,6 +1,5 @@
-import { OfferStatus } from "@prisma/client";
-import prisma from "../../utils/prisma";
 import { FileType, OfferStatus } from "@prisma/client";
+import prisma from "../../utils/prisma";
 import ApiError from "../../middlewares/classes/ApiError";
 
 // Create a new offer and store a message so chat list shows offer description
@@ -12,11 +11,6 @@ const create = async (data: {
   description: string;
   duration: string;
 }) => {
-  // First get the chat participant id for the sender
-  const participant = await prisma.participant.findFirst({
-    where: { chatId: data.chatId, authId: data.senderId },
-    select: { id: true },
-  });
 
   const [offer] = await prisma.$transaction(async (tx) => {
     // Create the offer

@@ -32,7 +32,7 @@ const getSectors = async () => {
     select: { sector: true },
     orderBy: { sector: "asc" },
   });
-  return sectors.map((s) => s.sector);
+  return sectors.map((s: { sector: string }) => s.sector);
 };
 
 export const industryService = { search, getSectors };
