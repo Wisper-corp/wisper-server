@@ -666,46 +666,40 @@ const incrementView = async (postId: string, userId: string) => {
 const searchGigMarket = async (
   _userId: string,
   searchQuery: string,
+  country: string,
   options: TPaginationOptions
 ) => {
   const { page, take, skip } = calculatePagination(options);
 
-  const whereConditions: Prisma.PostWhereInput = {
-    status: PostStatus.ACTIVE,
-    // Only posts with images (marketplace posts)
-    images: { isEmpty: false },
-    OR: [
-      // Match caption
-      {
-        caption: {
-          contains: searchQuery,
-          mode: 'insensitive',
-        },
+  const andConditions: Prisma.PostWhereInput[] = [
+    { status: PostStatus.ACTIVE },
+    { images: { isEmpty: false } },
+  ];
+
+  // Country filter — match author's address field
+  if (country) {
+    andConditions.push({
+      author: {
+        OR: [
+          { person: { address: { contains: country, mode: 'insensitive' } } },
+          { business: { address: { contains: country, mode: 'insensitive' } } },
+        ],
       },
-      // Match author's job title (person)
-      {
-        author: {
-          person: {
-            title: {
-              contains: searchQuery,
-              mode: 'insensitive',
-            },
-          },
-        },
-      },
-      // Match author's business industry
-      {
-        author: {
-          business: {
-            industry: {
-              contains: searchQuery,
-              mode: 'insensitive',
-            },
-          },
-        },
-      },
-    ],
-  };
+    });
+  }
+
+  // Search query filter
+  if (searchQuery) {
+    andConditions.push({
+      OR: [
+        { caption: { contains: searchQuery, mode: 'insensitive' } },
+        { author: { person: { title: { contains: searchQuery, mode: 'insensitive' } } } },
+        { author: { business: { industry: { contains: searchQuery, mode: 'insensitive' } } } },
+      ],
+    });
+  }
+
+  const whereConditions: Prisma.PostWhereInput = { AND: andConditions };
 
   const [posts, total] = await Promise.all([
     prisma.post.findMany({

@@ -227,6 +227,14 @@ const getUserRoles = async (
     });
   }
 
+  if (query.country) {
+    andConditions.push({
+      person: {
+        address: { contains: query.country as string, mode: "insensitive" },
+      },
+    });
+  }
+
   const whereConditions: Prisma.AuthWhereInput =
     andConditions.length > 0 ? { AND: andConditions } : {};
 

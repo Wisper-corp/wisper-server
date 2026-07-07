@@ -131,7 +131,8 @@ const incrementView = handleAsyncRequest(async (req: TRequest, res) => {
 const searchGigMarket = handleAsyncRequest(async (req: TRequest, res) => {
   const options = pick(req.query, ["page", "limit"]);
   const searchQuery = (req.query.q as string) || '';
-  const result = await PostService.searchGigMarket(req.user!.id, searchQuery, options);
+  const country = (req.query.country as string) || '';
+  const result = await PostService.searchGigMarket(req.user!.id, searchQuery, country, options);
   sendResponse(res, {
     message: "Gig market search results retrieved successfully!",
     data: result,
