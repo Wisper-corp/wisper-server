@@ -49,6 +49,8 @@ model Auth {
   notifications           Notification[]
   sentOffers              Offer[]                  @relation("OfferSender")
   receivedOffers          Offer[]                  @relation("OfferReceiver")
+  kycVerification         KycVerification?
+  kycBadge                KycVerificationBadge?
 
   @@map("auths")
 }
@@ -670,6 +672,76 @@ enum OfferStatus {
   ACCEPTED
   DECLINED
   PAID
+}
+
+// ─────────────────────────────────────────────
+// KYC VERIFICATION
+// ─────────────────────────────────────────────
+
+model KycVerification {
+  id     String @id @default(uuid())
+  authId String @unique
+  auth   Auth   @relation(fields: [authId], references: [id])
+
+  // Email verification
+  emailStatus    KycFieldStatus @default(UNVERIFIED)
+  verifiedEmail  String?        // the email that was verified
+
+  // Phone verification
+  phoneStatus    KycFieldStatus @default(UNVERIFIED)
+  verifiedPhone  String?        // the phone that was verified
+
+  // NIN verification (via QoreID)
+  ninStatus      KycFieldStatus @default(UNVERIFIED)
+  ninAttempts    Int            @default(0)  // max 3
+  ninNumber      String?
+  ninFirstName   String?
+  ninLastName    String?
+  ninDob         String?        // date of birth from QoreID, stored as string
+
+  // Address verification
+  addressStatus  KycFieldStatus @default(UNVERIFIED)
+  addressText    String?
+  addressDocUrl  String?        // S3 URL of proof document
+  addressDocType String?        // utility_bill | bank_statement | tenancy_agreement
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("kyc_verifications")
+}
+
+model KycVerificationBadge {
+  id     String @id @default(uuid())
+  authId String @unique
+  auth   Auth   @relation(fields: [authId], references: [id])
+
+  // Badge state
+  isActive         Boolean   @default(false)
+  isAdminGranted   Boolean   @default(false)  // manually given by admin
+  grantedAt        DateTime?
+  revokedAt        DateTime?
+
+  // Monthly billing
+  nextBillingDate  DateTime?
+  gracePeriodEnd   DateTime? // set when payment fails; badge removed after this
+  lastBilledAt     DateTime?
+
+  // Admin fee exemption
+  isFeeExempt      Boolean   @default(false)
+  feeExemptUntil   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("kyc_verification_badges")
+}
+
+enum KycFieldStatus {
+  UNVERIFIED
+  PENDING_REVIEW   // address doc submitted, awaiting admin review
+  VERIFIED
+  REJECTED
 }
 
 model JobTitle {
