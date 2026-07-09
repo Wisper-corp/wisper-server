@@ -208,14 +208,36 @@ const verifyNin = async (authId: string, nin: string) => {
     throw new ApiError(500, "NIN verification service not configured. Please contact support.");
   }
 
+  // QoreID — get access token first (returns 201)
+  const tokenRes = await fetch(`https://api.qoreid.com/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId: qoreAppId, secret: qoreApiKey }),
+  });
+
+  if (!tokenRes.ok && tokenRes.status !== 201) {
+    await prisma.kycVerification.update({
+      where: { authId },
+      data: { ninStatus: KycFieldStatus.REJECTED },
+    });
+    throw new ApiError(500, "NIN verification service unavailable. Please try again later.");
+  }
+
+  const tokenData = await tokenRes.json() as any;
+  const accessToken: string = tokenData.accessToken;
+
+  if (!accessToken) {
+    throw new ApiError(500, "NIN verification service error. Please try again later.");
+  }
+
   // QoreID — NIN lookup
   const qoreRes = await fetch(`https://api.qoreid.com/v1/ng/identities/nin/${nin}`, {
-    method: "GET",
+    method: "POST",
     headers: {
-      "Authorization": `Bearer ${qoreApiKey}`,
-      "app-id": qoreAppId,
+      "Authorization": `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
+    body: JSON.stringify({}),
   });
 
   const attemptsLeft = MAX_NIN_ATTEMPTS - updatedKyc.ninAttempts;
