@@ -116,21 +116,23 @@ const getSingle = async (id: string, currentAuthId: string) => {
   const connection = await prisma.connection.findFirst({
     where: {
       OR: [
-        {
-          requesterId: currentAuthId,
-          receiverId: id,
-        },
-        {
-          requesterId: id,
-          receiverId: currentAuthId,
-        },
+        { requesterId: currentAuthId, receiverId: id },
+        { requesterId: id, receiverId: currentAuthId },
       ],
     },
+  });
+
+  const ratingAgg = await prisma.recommendation.aggregate({
+    where: { receiverId: id },
+    _avg: { rating: true },
+    _count: { rating: true },
   });
 
   return {
     auth: result,
     connection,
+    avgRating: ratingAgg._avg.rating ?? 0,
+    ratingCount: ratingAgg._count.rating ?? 0,
   };
 };
 
@@ -164,7 +166,19 @@ const getMyProfile = async (id: string) => {
       },
     },
   });
-  return { auth: result };
+
+  // Compute rating stats
+  const ratingAgg = await prisma.recommendation.aggregate({
+    where: { receiverId: id },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+
+  return {
+    auth: result,
+    avgRating: ratingAgg._avg.rating ?? 0,
+    ratingCount: ratingAgg._count.rating ?? 0,
+  };
 };
 
 const updateMyProfile = async (
