@@ -123,8 +123,8 @@ const sendSmsOtp = async (phone: string): Promise<void> => {
   });
 
   const termiiApiKey = process.env.TERMII_API_KEY || "";
-  const termiiSenderId = process.env.TERMII_SENDER_ID || "Wisper";
-  const termiiBaseUrl = "https://api.ng.termii.com/api/sms/send";
+  const termiiSenderId = process.env.TERMII_SENDER_ID || "N-Alert";
+  const termiiBaseUrl = (process.env.TERMII_BASE_URL || "https://v4.api.termii.com") + "/api/sms/send";
 
   if (!termiiApiKey) {
     console.warn(`[Termii] TERMII_API_KEY not set. OTP for ${phone}: ${rawOtp}`);
