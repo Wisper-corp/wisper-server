@@ -701,7 +701,7 @@ const searchGigMarket = async (
 
   const whereConditions: Prisma.PostWhereInput = { AND: andConditions };
 
-  const [posts, total] = await Promise.all([
+  const [rawPosts, total] = await Promise.all([
     prisma.post.findMany({
       where: whereConditions,
       select: {
@@ -731,6 +731,24 @@ const searchGigMarket = async (
     }),
     prisma.post.count({ where: whereConditions }),
   ]);
+
+  // Attach avgRating and ratingCount for each post's author
+  const posts = await Promise.all(
+    rawPosts.map(async (post) => {
+      const authorId = post.author?.id;
+      if (!authorId) return { ...post, avgRating: 0, ratingCount: 0 };
+      const agg = await prisma.recommendation.aggregate({
+        where: { receiverId: authorId },
+        _avg: { rating: true },
+        _count: { rating: true },
+      });
+      return {
+        ...post,
+        avgRating: agg._avg.rating ?? 0,
+        ratingCount: agg._count.rating ?? 0,
+      };
+    })
+  );
 
   return { meta: { page, limit: take, total }, posts };
 };
