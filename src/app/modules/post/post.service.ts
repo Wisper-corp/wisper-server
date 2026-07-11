@@ -281,12 +281,30 @@ const getFeedPosts = async (userId: string, options: TPaginationOptions) => {
 
   const total = boostedTotal + normalTotal;
 
+  // Attach avgRating and ratingCount for each post's author
+  const postsWithRatings = await Promise.all(
+    posts.map(async (post: any) => {
+      const authorId = post.author?.id;
+      if (!authorId) return { ...post, avgRating: 0, ratingCount: 0 };
+      const agg = await prisma.recommendation.aggregate({
+        where: { receiverId: authorId },
+        _avg: { rating: true },
+        _count: { rating: true },
+      });
+      return {
+        ...post,
+        avgRating: agg._avg.rating ?? 0,
+        ratingCount: agg._count.rating ?? 0,
+      };
+    })
+  );
+
   const meta = {
     page,
     limit: take,
     total,
   };
-  return { meta, posts };
+  return { meta, posts: postsWithRatings };
 };
 
 const getSingle = async (id: string) => {
