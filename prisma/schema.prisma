@@ -507,6 +507,7 @@ model Offer {
   description String
   duration    String
   status      OfferStatus @default(PENDING)
+  escrowAmount Float?      // amount held in admin escrow wallet
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -673,6 +674,8 @@ enum OfferStatus {
   ACCEPTED
   DECLINED
   PAID
+  RELEASED
+  DISPUTED
 }
 
 // ─────────────────────────────────────────────

@@ -47,4 +47,18 @@ router.post(
   offerController.pay
 );
 
+// Release payment from escrow to seller (buyer confirms job done)
+router.post(
+  "/:id/release",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  offerController.release
+);
+
+// Open dispute
+router.post(
+  "/:id/dispute",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  offerController.dispute
+);
+
 export const offerRoutes = router;

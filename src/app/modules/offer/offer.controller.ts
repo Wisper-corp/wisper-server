@@ -80,6 +80,28 @@ const pay = handleAsyncRequest(async (req: TRequest, res: Response) => {
   });
 });
 
+// Release escrow payment to seller
+const release = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const id = req.params.id as string;
+  const userId = req.user!.id;
+  const offer = await offerService.release(id, userId);
+  sendResponse(res, {
+    message: "Payment released to seller successfully!",
+    data: offer,
+  });
+});
+
+// Open dispute
+const dispute = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const id = req.params.id as string;
+  const userId = req.user!.id;
+  const offer = await offerService.dispute(id, userId);
+  sendResponse(res, {
+    message: "Dispute opened. Our team will review shortly.",
+    data: offer,
+  });
+});
+
 export const offerController = {
   create,
   getByChatId,
@@ -87,4 +109,6 @@ export const offerController = {
   accept,
   decline,
   pay,
+  release,
+  dispute,
 };
