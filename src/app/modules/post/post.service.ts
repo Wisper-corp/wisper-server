@@ -729,6 +729,7 @@ const searchGigMarket = async (
         views: true,
         price: true,
         deliveryTime: true,
+        currency: true,
         createdAt: true,
         commentAccess: true,
         author: {
