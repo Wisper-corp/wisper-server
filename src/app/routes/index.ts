@@ -30,6 +30,7 @@ import { offerRoutes } from "../modules/offer/offer.routes";
 import { jobTitleRoutes } from "../modules/jobTitle/jobTitle.routes";
 import { industryRoutes } from "../modules/industry/industry.routes";
 import { kycRoutes } from "../modules/kyc/kyc.routes";
+import { bankRoutes } from "../modules/bank/bank.routes";
 
 const router = Router();
 
@@ -63,6 +64,7 @@ const routes = [
   { path: "/job-titles", route: jobTitleRoutes },
   { path: "/industries", route: industryRoutes },
   { path: "/kyc", route: kycRoutes },
+  { path: "/banks", route: bankRoutes },
 
   { path: "/admins", route: adminRoutes },
   { path: "/upload-files", route: fileRoutes },
