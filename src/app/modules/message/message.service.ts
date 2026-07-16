@@ -127,17 +127,42 @@ const getMessagesByChat = async (
     orderBy: sortBy && orderBy ? { [sortBy]: orderBy } : { createdAt: "asc" },
   });
 
-  const formattedMessages = messages.map(msg => {
-    const seenIds = msg.messagesSeen.map(s => s.participant.auth.id);
-
+  const formattedMessages = await Promise.all(messages.map(async msg => {
+    const seenIds = msg.messagesSeen.map((s: any) => s.participant.auth.id);
     const isRead = seenIds.includes(authId);
+
+    // If this is an OFFER message, attach the offer data
+    let offerData = null;
+    if (msg.fileType === 'OFFER') {
+      offerData = await prisma.offer.findFirst({
+        where: { chatId: msg.chatId, senderId: msg.sender.id },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              person: { select: { name: true, image: true } },
+              business: { select: { name: true, image: true } },
+            },
+          },
+          receiver: {
+            select: {
+              id: true,
+              person: { select: { name: true, image: true } },
+              business: { select: { name: true, image: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     return {
       ...msg,
       messagesSeen: undefined,
       isRead,
+      offerData,
     };
-  });
+  }));
 
   const total = await prisma.message.count({ where: { chatId } });
 
