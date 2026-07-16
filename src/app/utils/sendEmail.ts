@@ -27,6 +27,7 @@ export const sendEmail = async (
       to,
       subject,
       html: emailContent,
+      from: "Wisper <support@wisperonline.com>",
     };
 
     await axios.post(config.email.emailSendingApi as string, emailData);
