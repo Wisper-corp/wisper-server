@@ -1,7 +1,8 @@
 import fs from "fs";
-import axios from "axios";
+import { Resend } from "resend";
 import ApiError from "../middlewares/classes/ApiError";
-import config from "../config";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 type Replacements = Record<string, string | number>;
 
@@ -23,13 +24,11 @@ export const sendEmail = async (
     }
     emailContent = emailContent.replace("{{year}}", year);
 
-    const emailData = {
+    await resend.emails.send({
+      from: "Wisper <support@wisperonline.com>",
       to,
       subject,
       html: emailContent,
-      from: "Wisper <support@wisperonline.com>",
-    };
-
-    await axios.post(config.email.emailSendingApi as string, emailData);
+    });
   });
 };
