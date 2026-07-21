@@ -132,28 +132,22 @@ const getAllJobs = async (
   const whereConditions: Prisma.JobWhereInput =
     andConditions.length > 0 ? { AND: andConditions } : {};
 
-  // Show only jobs that have a company logo (scraped or user-posted)
   // Filter scraped jobs to English titles only
+  // Non-English chars: exclude jobs with common non-ASCII characters (German, French, etc.)
   const finalWhereConditions: Prisma.JobWhereInput = {
     AND: [
       whereConditions,
       {
         OR: [
-          // User-posted jobs with a business profile image
-          {
-            isScraped: false,
-            author: {
-              business: {
-                image: { not: null, notIn: [''] }
-              }
-            }
-          },
-          // Scraped jobs with a logo AND English title
+          // User-posted jobs — always show
+          { isScraped: false },
+          // Scraped jobs — only show if they have a company logo AND title has no non-Latin characters
           {
             isScraped: true,
-            companyLogo: { not: null, notIn: [''] },
+            companyLogo: { not: null },
             NOT: {
               OR: [
+                { companyLogo: '' },
                 { title: { contains: 'ü' } },
                 { title: { contains: 'ö' } },
                 { title: { contains: 'ä' } },

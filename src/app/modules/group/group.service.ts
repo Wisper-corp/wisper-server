@@ -105,6 +105,17 @@ const getAllGroups = async (
               participants: true,
             },
           },
+          participants: {
+            take: 3,
+            select: {
+              auth: {
+                select: {
+                  person: { select: { name: true, image: true } },
+                  business: { select: { name: true, image: true } },
+                },
+              },
+            },
+          },
         },
       },
     },
