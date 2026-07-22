@@ -5,6 +5,7 @@ import { authServices } from "./auth.service";
 import config from "../../config";
 import { TRequest } from "../../interface/global.interface";
 import pick from "../../utils/pick";
+import prisma from "../../utils/prisma";
 
 const login = handleAsyncRequest(async (req: Request, res: Response) => {
   const result = await authServices.login(req.body);
@@ -121,6 +122,17 @@ const logout = handleAsyncRequest(async (req: TRequest, res: Response) => {
   });
 });
 
+const updateFcmToken = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const authId = req.user!.id;
+  const { fcmToken } = req.body;
+  if (!fcmToken) throw new Error("fcmToken is required");
+  await prisma.auth.update({
+    where: { id: authId },
+    data: { fcmToken },
+  });
+  sendResponse(res, { message: "FCM token updated", data: null });
+});
+
 export const authController = {
   login,
   googleLogin,
@@ -131,5 +143,6 @@ export const authController = {
   changeAccountStatus,
   refreshToken,
   toggleNotificationPermission,
+  updateFcmToken,
   logout,
 };
