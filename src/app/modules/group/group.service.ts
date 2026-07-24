@@ -96,6 +96,7 @@ const getAllGroups = async (
       id: true,
       name: true,
       image: true,
+      tags: true,
       createdAt: true,
       chat: {
         select: {

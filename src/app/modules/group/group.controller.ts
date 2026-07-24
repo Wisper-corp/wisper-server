@@ -4,6 +4,7 @@ import handleAsyncRequest from "../../utils/handleAsyncRequest";
 import pick from "../../utils/pick";
 import { sendResponse } from "../../utils/sendResponse";
 import { groupServices } from "./group.service";
+import prisma from "../../utils/prisma";
 
 const createGroup = handleAsyncRequest(async (req: TRequest, res) => {
   const result = await groupServices.createGroup(req.body, req.user!.id);
@@ -102,6 +103,18 @@ const updateGroupData = handleAsyncRequest(async (req: TRequest, res) => {
   });
 });
 
+const updateGroupTags = handleAsyncRequest(async (req: TRequest, res) => {
+  const groupId = req.params.id as string;
+  const { tags } = req.body as { tags: string[] };
+  if (!Array.isArray(tags)) throw new Error("tags must be an array");
+  const result = await prisma.group.update({
+    where: { id: groupId },
+    data: { tags },
+    select: { id: true, name: true, tags: true },
+  });
+  sendResponse(res, { message: "Group tags updated!", data: result });
+});
+
 const toggleGroupVisibility = handleAsyncRequest(async (req: TRequest, res) => {
   const result = await groupServices.toggleGroupVisibility(
     req.params.id as string
@@ -129,11 +142,12 @@ export const groupController = {
   getAllGroups,
   getPublicGroups,
   getSingleGroup,
+  getGroupMembers,
   addGroupMember,
   joinGroup,
   changeGroupImage,
   updateGroupData,
+  updateGroupTags,
   toggleGroupVisibility,
   toggleGroupInvitationAccess,
-  getGroupMembers,
 };

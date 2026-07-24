@@ -235,6 +235,7 @@ model Group {
   isPrivate       Boolean  @default(true)
   allowInvitation Boolean  @default(false)
   image           String?
+  tags            String[] @default([])
   createdAt       DateTime @default(now())
   chat            Chat?
   posts           Post[]

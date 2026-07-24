@@ -71,6 +71,12 @@ router.patch(
 );
 
 router.patch(
+  "/tags/:id",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  groupController.updateGroupTags
+);
+
+router.patch(
   "/visibility/:id",
   authorize(UserRole.PERSON, UserRole.BUSINESS),
   groupController.toggleGroupVisibility

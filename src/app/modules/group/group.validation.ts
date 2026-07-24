@@ -1,4 +1,4 @@
-import * as z from "zod";
+import { z } from "zod";
 
 export const createGroupZod = z.object({
   name: z.string().min(1, "Name is required"),
@@ -8,6 +8,7 @@ export const createGroupZod = z.object({
   members: z
     .array(z.string().uuid())
     .nonempty("At least one member is required"),
+  tags: z.array(z.string()).optional(),
 });
 
 export type TCreateGroup = z.infer<typeof createGroupZod>;
@@ -19,6 +20,9 @@ export const addGroupMemberZod = z.object({
 export const updateGroupDataZod = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
+  isPrivate: z.boolean().optional(),
+  allowInvitation: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 export type TUpdateGroupData = z.infer<typeof updateGroupDataZod>;
