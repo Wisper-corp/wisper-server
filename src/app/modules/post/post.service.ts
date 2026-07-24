@@ -42,7 +42,30 @@ const ensureGroupMembership = async (groupId: string, userId: string) => {
   }
 };
 
+import { checkContentRelevance } from "../../utils/aiModeration";
+
 const create = async (id: string, payload: TCreatePost, files?: TFile[]) => {
+  // AI content moderation for group posts
+  if (payload.groupId) {
+    const group = await prisma.group.findUnique({
+      where: { id: payload.groupId },
+      select: { name: true, tags: true },
+    });
+    if (group && group.tags && group.tags.length > 0) {
+      const check = await checkContentRelevance(
+        { caption: payload.caption },
+        group.tags,
+        group.name
+      );
+      if (!check.allowed) {
+        throw new ApiError(
+          400,
+          check.reason ||
+            `This content is not relevant to the ${group.name} community. Please post content related to: ${group.tags.join(", ")}.`
+        );
+      }
+    }
+  }
   payload.authorId = id;
 
   if (payload.groupId) {

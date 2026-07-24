@@ -34,11 +34,32 @@ const ensureGroupMembership = async (groupId: string, userId: string) => {
   }
 };
 
+import { checkContentRelevance } from "../../utils/aiModeration";
+
 const createJob = async (userId: string, payload: Job) => {
   payload.authorId = userId;
 
+  // AI content moderation for group jobs
   if (payload.groupId) {
     await ensureGroupMembership(payload.groupId, userId);
+    const group = await prisma.group.findUnique({
+      where: { id: payload.groupId },
+      select: { name: true, tags: true },
+    });
+    if (group && group.tags && group.tags.length > 0) {
+      const check = await checkContentRelevance(
+        { title: payload.title as string, description: payload.description as string },
+        group.tags,
+        group.name
+      );
+      if (!check.allowed) {
+        throw new ApiError(
+          400,
+          check.reason ||
+            `This job is not relevant to the ${group.name} community. Please post jobs related to: ${group.tags.join(", ")}.`
+        );
+      }
+    }
   }
 
   const result = await prisma.job.create({ data: payload });
