@@ -77,6 +77,12 @@ router.patch(
   authController.updateDeviceTokens
 );
 
+router.patch(
+  "/fcm-token",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  authController.updateFcmToken
+);
+
 router.post(
   "/logout",
   authorize(UserRole.ADMIN, UserRole.PERSON, UserRole.BUSINESS),
