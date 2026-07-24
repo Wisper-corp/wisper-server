@@ -9,7 +9,7 @@ const router = Router();
 
 router.post(
   "/",
-  authorize(UserRole.BUSINESS),
+  authorize(UserRole.BUSINESS, UserRole.PERSON),
   handleZodValidation(createJobSchema),
   jobController.createJob
 );
