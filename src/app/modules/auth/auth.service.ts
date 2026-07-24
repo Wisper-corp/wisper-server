@@ -7,6 +7,7 @@ import {
   TGoogleLoginInput,
   TLoginInput,
   TResetPasswordInput,
+  TUpdateDeviceTokenInput,
 } from "./auth.validation";
 import bcrypt from "bcrypt";
 import jsonwebtoken, { Secret } from "jsonwebtoken";
@@ -470,6 +471,30 @@ const toggleNotificationPermission = async (id: string) => {
   return result;
 };
 
+const updateDeviceTokens = async (
+  id: string,
+  payload: TUpdateDeviceTokenInput
+) => {
+  const result = await prisma.auth.update({
+    where: {
+      id,
+    },
+    data: {
+      fcmToken: payload.fcmToken,
+      voipToken: payload.voipToken,
+      deviceType: payload.deviceType,
+    },
+    select: {
+      id: true,
+      fcmToken: true,
+      voipToken: true,
+      deviceType: true,
+    },
+  });
+
+  return result;
+};
+
 const logout = async (id: string) => {
   await prisma.auth.update({
     where: {
@@ -477,6 +502,8 @@ const logout = async (id: string) => {
     },
     data: {
       fcmToken: null,
+      voipToken: null,
+      deviceType: null,
     },
   });
   return null;
@@ -492,5 +519,6 @@ export const authServices = {
   changePassword,
   changeAccountStatus,
   toggleNotificationPermission,
+  updateDeviceTokens,
   logout,
 };

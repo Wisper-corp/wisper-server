@@ -112,6 +112,16 @@ const toggleNotificationPermission = handleAsyncRequest(
   }
 );
 
+const updateDeviceTokens = handleAsyncRequest(
+  async (req: TRequest, res: Response) => {
+    const result = await authServices.updateDeviceTokens(req.user!.id, req.body);
+    sendResponse(res, {
+      message: "Device tokens updated successfully!",
+      data: result,
+    });
+  }
+);
+
 const logout = handleAsyncRequest(async (req: TRequest, res: Response) => {
   await authServices.logout(req.user!.id);
   res.clearCookie("wisperRefreshToken", { httpOnly: true });
@@ -131,5 +141,6 @@ export const authController = {
   changeAccountStatus,
   refreshToken,
   toggleNotificationPermission,
+  updateDeviceTokens,
   logout,
 };

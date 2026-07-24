@@ -17,7 +17,7 @@ export const googleLoginSchema = z.object({
   email: emailZod,
   name: z.string(),
   image: z.string(),
-  fcmToken: z.string(),
+  fcmToken: z.string().optional(),
   voipToken: z.string().optional(),
   deviceType: z.enum(["android", "ios"]).optional(),
   role: z.enum(["PERSON", "BUSINESS"]),
@@ -45,3 +45,21 @@ export const changeAccountStatusZod = z.object({
     .default("ACTIVE")
     .transform(val => val.toUpperCase()),
 });
+
+export const updateDeviceTokenZod = z
+  .object({
+    fcmToken: z.string().optional(),
+    voipToken: z.string().optional(),
+    deviceType: z.enum(["android", "ios"]).optional(),
+  })
+  .refine(
+    payload =>
+      payload.fcmToken !== undefined ||
+      payload.voipToken !== undefined ||
+      payload.deviceType !== undefined,
+    {
+      message: "At least one device token field is required",
+    }
+  );
+
+export type TUpdateDeviceTokenInput = z.infer<typeof updateDeviceTokenZod>;

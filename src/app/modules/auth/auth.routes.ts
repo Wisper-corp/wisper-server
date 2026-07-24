@@ -6,6 +6,7 @@ import {
   googleLoginSchema,
   loginZodSchema,
   resetPasswordZod,
+  updateDeviceTokenZod,
 } from "./auth.validation";
 import { authController } from "./auth.controller";
 import authorize from "../../middlewares/authorize";
@@ -67,6 +68,13 @@ router.patch(
   "/notification-permission",
   authorize(UserRole.PERSON),
   authController.toggleNotificationPermission
+);
+
+router.patch(
+  "/device-token",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  handleZodValidation(updateDeviceTokenZod),
+  authController.updateDeviceTokens
 );
 
 router.post(

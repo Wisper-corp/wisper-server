@@ -3,7 +3,10 @@ import { RtcRole, RtcTokenBuilder } from "agora-access-token";
 import ApiError from "../../../middlewares/classes/ApiError";
 import prisma from "../../../utils/prisma";
 import config from "../../../config";
-import { sendDataMessageToToken } from "../../../utils/sendNotification";
+import {
+  sendDataMessageToToken,
+  sendVoipPushToToken,
+} from "../../../utils/sendNotification";
 import { TAckFn, TSocket } from "../../interface/socket.interface";
 import ackHandler from "../../utils/ackHandler";
 import eventHandler from "../../utils/eventHandler";
@@ -72,6 +75,7 @@ export const callInvite = eventHandler<TCallInvitePayload>(
             auth: {
               select: {
                 fcmToken: true,
+                voipToken: true,
                 deviceType: true,
                 person: {
                   select: {
@@ -290,10 +294,29 @@ export const callInvite = eventHandler<TCallInvitePayload>(
     await Promise.all(
       call.participants
         .filter(participant => participant.role === CallRole.RECEIVER)
-        .map(participant => {
+        .map(async participant => {
           const receiverToken = participant.auth?.fcmToken;
+          const voipToken = participant.auth?.voipToken;
           const deviceType = participant.auth?.deviceType;
-          if (!receiverToken || deviceType === "ios") return null;
+          if (deviceType === "ios") {
+            if (!voipToken) return null;
+
+            try {
+              return await sendVoipPushToToken(voipToken, {
+                type: "incoming_call",
+                call_id: call.id,
+                channel_name: call.roomId,
+                call_type: call.type,
+                caller_name: callerName,
+                caller_image: callerImage,
+              });
+            } catch (error) {
+              console.error("Failed to send iOS VoIP push", error);
+              return null;
+            }
+          }
+
+          if (!receiverToken) return null;
 
           const agoraToken = buildAgoraToken(
             participant.authId,
