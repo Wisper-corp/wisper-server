@@ -64,6 +64,12 @@ router.patch(
 );
 
 router.patch(
+  "/tags/:id",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  groupController.updateGroupTags
+);
+
+router.patch(
   "/:id",
   authorize(UserRole.PERSON, UserRole.BUSINESS),
   handleZodValidation(updateGroupDataZod),

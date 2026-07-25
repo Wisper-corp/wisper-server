@@ -30,19 +30,23 @@ export const checkContentRelevance = async (
 
   const tagsText = communityTags.join(", ");
 
-  const prompt = `You are a community content moderator for "${communityName}", a business community focused on: ${tagsText}.
+  const prompt = `You are a STRICT content moderator for the "${communityName}" community.
+Community niche tags: ${tagsText}
 
-A user wants to post this content:
+Content to evaluate:
 "${contentText.substring(0, 500)}"
 
-Is this content relevant to this community's niche (${tagsText})?
+RULES:
+1. Only ALLOW content that is DIRECTLY about: ${tagsText}
+2. BLOCK anything unrelated (e.g. software development in an FMCG community)
+3. Be strict - when in doubt, BLOCK it
 
-Reply with ONLY a JSON object in this exact format:
-{"allowed": true} 
+Reply with ONLY a JSON object, no markdown, no explanation:
+{"allowed": true}
 OR
-{"allowed": false, "reason": "Brief explanation of why this content doesn't match the community niche"}
+{"allowed": false, "reason": "one sentence reason"}
 
-No other text.`;
+JSON only, nothing else:`;
 
   try {
     const message = await client.messages.create({
@@ -54,8 +58,14 @@ No other text.`;
     const responseText =
       message.content[0]?.type === "text" ? (message.content[0] as { type: "text"; text: string }).text.trim() : "";
 
-    // Parse JSON response
-    const parsed = JSON.parse(responseText);
+    // Strip markdown code blocks if present (Claude sometimes wraps JSON in ```json...```)
+    const cleanText = responseText
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    const parsed = JSON.parse(cleanText);
     return {
       allowed: parsed.allowed === true,
       reason: parsed.reason,
