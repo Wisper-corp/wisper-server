@@ -377,11 +377,19 @@ const getSingle = async (id: string) => {
   return result;
 };
 
-const getGroupPosts = async (groupId: string, options: TPaginationOptions) => {
-  const whereConditions: Prisma.PostWhereInput = {
-    groupId,
-    status: PostStatus.ACTIVE,
-  };
+const getGroupPosts = async (groupId: string, options: TPaginationOptions, query?: Record<string, any>) => {
+  const andConditions: Prisma.PostWhereInput[] = [
+    { groupId },
+    { status: PostStatus.ACTIVE },
+  ];
+
+  if (query?.searchTerm) {
+    andConditions.push({
+      caption: { contains: query.searchTerm as string, mode: "insensitive" },
+    });
+  }
+
+  const whereConditions: Prisma.PostWhereInput = { AND: andConditions };
 
   const { page, take, skip, sortBy, orderBy } = calculatePagination(options);
 

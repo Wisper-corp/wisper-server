@@ -262,23 +262,16 @@ const getGroupJobs = async (groupId: string, options: TPaginationOptions) => {
       author: {
         select: {
           id: true,
+          person: {
+            select: { id: true, name: true, title: true, image: true },
+          },
           business: {
-            select: {
-              id: true,
-              name: true,
-              industry: true,
-              address: true,
-              image: true,
-            },
+            select: { id: true, name: true, industry: true, address: true, image: true },
           },
         },
       },
       group: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-        },
+        select: { id: true, name: true, image: true },
       },
       title: true,
       description: true,

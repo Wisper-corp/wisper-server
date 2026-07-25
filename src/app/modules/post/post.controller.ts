@@ -31,7 +31,8 @@ const getGroupPosts = handleAsyncRequest(async (req: TRequest, res) => {
   const options = pick(req.query, ["page", "limit", "sortBy", "orderBy"]);
   const result = await PostService.getGroupPosts(
     req.params.groupId as string,
-    options
+    options,
+    req.query
   );
   sendResponse(res, {
     message: "Group posts retrieved successfully!",

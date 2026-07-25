@@ -336,6 +336,7 @@ const getGroupMembers = async (
               name: true,
               email: true,
               image: true,
+              title: true,
             },
           },
           business: {
@@ -343,6 +344,7 @@ const getGroupMembers = async (
               name: true,
               email: true,
               image: true,
+              industry: true,
             },
           },
         },
