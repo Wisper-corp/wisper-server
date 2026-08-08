@@ -322,10 +322,11 @@ const removeParticipant = async (
     },
   });
 
-  await prisma.chatParticipant.findUniqueOrThrow({
+  const targetParticipant = await prisma.chatParticipant.findUniqueOrThrow({
     where: {
       id: payload.participantId,
     },
+    select: { authId: true },
   });
 
   const myParticipant = await prisma.chatParticipant.findFirst({
@@ -352,7 +353,9 @@ const removeParticipant = async (
       "You can only remove participants from groups & classes!"
     );
 
-  if (myParticipant?.role !== ChatRole.ADMIN)
+  // Allow if leaving yourself OR if you are admin
+  const isSelfLeave = targetParticipant.authId === authId;
+  if (!isSelfLeave && myParticipant?.role !== ChatRole.ADMIN)
     throw new ApiError(403, "You are not an admin of this chat!");
 
   const result = await prisma.chatParticipant.delete({
