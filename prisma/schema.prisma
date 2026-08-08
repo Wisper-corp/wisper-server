@@ -197,6 +197,7 @@ model Job {
   responsibilities String[]
   applicationType  JobApplicationType
   applicationLink  String?
+  applicationEmail String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   favorites        FavoriteJob[]
@@ -617,8 +618,10 @@ enum JobApplicationType {
 enum JobQualification {
   BSC
   PHD
-  NHD
+  HND
   OND
+  SSCE
+  MSC
 }
 
 enum JobLocationType {
