@@ -39,7 +39,10 @@ import { checkContentRelevance } from "../../utils/aiModeration";
 const createJob = async (userId: string, payload: Job) => {
   payload.authorId = userId;
 
-  // AI content moderation for group jobs
+  // Default industry if not provided
+  if (!payload.industry) payload.industry = "General";
+
+  // Ensure group membership
   if (payload.groupId) {
     await ensureGroupMembership(payload.groupId, userId);
   }
