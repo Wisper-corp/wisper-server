@@ -9,7 +9,7 @@ const router = Router();
 
 router.post(
   "/",
-  authorize(UserRole.BUSINESS),
+  authorize(UserRole.BUSINESS, UserRole.PERSON),
   handleZodValidation(createJobSchema),
   jobController.createJob
 );
@@ -30,10 +30,10 @@ router.get(
 );
 router.patch(
   "/:id",
-  authorize(UserRole.BUSINESS),
+  authorize(UserRole.BUSINESS, UserRole.PERSON),
   handleZodValidation(createJobSchema.partial()),
   jobController.updateJob
 );
-router.delete("/:id", authorize(UserRole.BUSINESS), jobController.deleteJob);
+router.delete("/:id", authorize(UserRole.BUSINESS, UserRole.PERSON), jobController.deleteJob);
 
 export const jobRoutes = router;
