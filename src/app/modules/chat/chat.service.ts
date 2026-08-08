@@ -358,6 +358,11 @@ const removeParticipant = async (
   if (!isSelfLeave && myParticipant?.role !== ChatRole.ADMIN)
     throw new ApiError(403, "You are not an admin of this chat!");
 
+  // Delete related message_seen records first to avoid FK constraint
+  await prisma.messageSeen.deleteMany({
+    where: { participantId: payload.participantId },
+  });
+
   const result = await prisma.chatParticipant.delete({
     where: {
       id: payload.participantId,
