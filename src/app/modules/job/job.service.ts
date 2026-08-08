@@ -42,12 +42,15 @@ const createJob = async (userId: string, payload: Job) => {
   // Default industry if not provided
   if (!payload.industry) payload.industry = "General";
 
+  // Strip fields not yet in Prisma client (added via raw SQL migration)
+  const { currency, applicationEmail, ...cleanPayload } = payload as any;
+
   // Ensure group membership
-  if (payload.groupId) {
-    await ensureGroupMembership(payload.groupId, userId);
+  if (cleanPayload.groupId) {
+    await ensureGroupMembership(cleanPayload.groupId, userId);
   }
 
-  const result = await prisma.job.create({ data: payload });
+  const result = await prisma.job.create({ data: cleanPayload });
 
   if (payload.industry) {
     const recipients = await prisma.auth.findMany({
