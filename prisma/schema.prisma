@@ -601,6 +601,7 @@ enum MuteFor {
 enum ChatRole {
   MEMBER
   ADMIN
+  MODERATOR
 }
 
 enum ChatType {

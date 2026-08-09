@@ -80,6 +80,14 @@ const removeParticipant = handleAsyncRequest(async (req: TRequest, res) => {
   });
 });
 
+const updateParticipantRole = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await chatService.updateParticipantRole(req.user!.id, req.body);
+  sendResponse(res, {
+    message: "Participant role updated successfully!",
+    data: result,
+  });
+});
+
 const blockChatParticipant = handleAsyncRequest(async (req: TRequest, res) => {
   const result = await chatService.blockChatParticipant(req.user!.id, req.body);
   sendResponse(res, {
@@ -121,6 +129,7 @@ export const chatController = {
   muteChat,
   unmuteChat,
   removeParticipant,
+  updateParticipantRole,
   blockChatParticipant,
   unBlockChatParticipant,
   deleteChat,

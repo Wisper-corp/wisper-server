@@ -64,6 +64,12 @@ router.patch(
 );
 
 router.patch(
+  "/update-participant-role",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  chatController.updateParticipantRole
+);
+
+router.patch(
   "/block-participant",
   authorize(UserRole.PERSON, UserRole.BUSINESS),
   handleZodValidation(blockParticipantZod),
