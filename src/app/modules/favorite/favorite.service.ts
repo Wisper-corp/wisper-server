@@ -45,6 +45,14 @@ const myFavoriteList = async (authId: string) => {
                   image: true,
                 },
               },
+              person: {
+                select: {
+                  id: true,
+                  name: true,
+                  title: true,
+                  image: true,
+                },
+              },
             },
           },
         },

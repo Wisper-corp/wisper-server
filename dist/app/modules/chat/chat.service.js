@@ -416,6 +416,25 @@ const deleteChat = async (authId, chatId) => {
     });
     return result;
 };
+const updateParticipantRole = async (authId, payload) => {
+    // Verify caller is ADMIN
+    const myParticipant = await prisma_1.default.chatParticipant.findFirst({
+        where: { chatId: payload.chatId, authId },
+        select: { role: true },
+    });
+    if (myParticipant?.role !== client_1.ChatRole.ADMIN)
+        throw new ApiError_1.default(403, "Only admins can assign roles!");
+    // Validate role
+    const validRoles = ["ADMIN", "MODERATOR", "MEMBER"];
+    if (!validRoles.includes(payload.role))
+        throw new ApiError_1.default(400, `Invalid role. Must be one of: ${validRoles.join(", ")}`);
+    const result = await prisma_1.default.chatParticipant.update({
+        where: { id: payload.participantId },
+        data: { role: payload.role },
+        select: { id: true, role: true, authId: true },
+    });
+    return result;
+};
 exports.chatService = {
     createChat,
     getMyChats,
@@ -428,5 +447,6 @@ exports.chatService = {
     blockChatParticipant,
     unBlockChatParticipant,
     deleteChat,
+    updateParticipantRole,
 };
 //# sourceMappingURL=chat.service.js.map
