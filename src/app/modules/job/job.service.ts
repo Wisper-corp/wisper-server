@@ -191,6 +191,9 @@ const getAllJobs = async (
       author: {
         select: {
           id: true,
+          person: {
+            select: { id: true, name: true, title: true, image: true },
+          },
           business: {
             select: {
               id: true,
@@ -302,6 +305,9 @@ const getSingleJob = async (id: string, userId: string) => {
       author: {
         select: {
           id: true,
+          person: {
+            select: { id: true, name: true, title: true, image: true },
+          },
           business: {
             select: {
               id: true,
