@@ -1,6 +1,6 @@
 node_modules
 .env
-dist
+# dist — tracked in git so server always has correct compiled files
 /generated/prisma
 createModule.js
 firebase-service.json
