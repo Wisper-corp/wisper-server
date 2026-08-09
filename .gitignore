@@ -1,6 +1,12 @@
 node_modules
 .env
-# dist — tracked in git so server always has correct compiled files
+# Only track specific patched dist files, ignore the rest
+dist/**
+!dist/app/modules/job/job.service.js
+!dist/app/modules/job/job.routes.js
+!dist/app/modules/job/job.validation.js
+!dist/app/modules/post/post.service.js
+!dist/app/modules/chat/chat.service.js
 /generated/prisma
 createModule.js
 firebase-service.json
