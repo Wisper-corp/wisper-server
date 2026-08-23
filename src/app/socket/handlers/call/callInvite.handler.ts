@@ -318,21 +318,33 @@ export const callInvite = eventHandler<TCallInvitePayload>(
 
           if (!receiverToken) return null;
 
-          const agoraToken = buildAgoraToken(
-            participant.authId,
-            call.roomId,
-            getNumericAgoraUid(participant.authId)
-          );
+          // A push failure must not fail the invite: the socket `callIncoming`
+          // above has already rung every callee that is online, and throwing
+          // here would hand the caller a failed ack for a call that is in fact
+          // ringing. Log and carry on (this is how the iOS branch behaves too).
+          try {
+            const agoraToken = buildAgoraToken(
+              participant.authId,
+              call.roomId,
+              getNumericAgoraUid(participant.authId)
+            );
 
-          return sendDataMessageToToken(receiverToken, {
-            type: "incoming_call",
-            call_id: call.id,
-            caller_name: callerName,
-            caller_image: callerImage,
-            call_type: call.type,
-            channel_name: call.roomId,
-            agora_token: agoraToken,
-          });
+            return await sendDataMessageToToken(receiverToken, {
+              type: "incoming_call",
+              call_id: call.id,
+              caller_name: callerName,
+              caller_image: callerImage,
+              call_type: call.type,
+              channel_name: call.roomId,
+              agora_token: agoraToken,
+            });
+          } catch (error) {
+            console.error(
+              "Failed to send Android call push for call " + call.id,
+              error
+            );
+            return null;
+          }
         })
     );
 
