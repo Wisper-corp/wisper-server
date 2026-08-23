@@ -7,6 +7,7 @@ import {
 import { jobFilterableFields, jobSearchableFields } from "./job.constant";
 import ApiError from "../../middlewares/classes/ApiError";
 import { sendNotificationToUser } from "../../utils/sendNotification";
+import config from "../../config";
 
 const ensureGroupMembership = async (groupId: string, userId: string) => {
   const group = await prisma.group.findUniqueOrThrow({
@@ -236,10 +237,44 @@ const getAllJobs = async (
   return { meta, jobs };
 };
 
+/// Scraped jobs are only fit to show when they carry a company logo and the
+/// title is Latin-script — same bar the main feed applies.
+const presentableScrapedJob: Prisma.JobWhereInput = {
+  isScraped: true,
+  companyLogo: { not: null },
+  NOT: {
+    OR: [
+      { companyLogo: "" },
+      { title: { contains: "ü" } },
+      { title: { contains: "ö" } },
+      { title: { contains: "ä" } },
+      { title: { contains: "ß" } },
+      { title: { contains: "é" } },
+      { title: { contains: "è" } },
+      { title: { contains: "ê" } },
+      { title: { contains: "ñ" } },
+      { title: { contains: "ç" } },
+      { title: { contains: "m/w/d" } },
+      { title: { contains: "(m/f/d)" } },
+      { title: { contains: "(f/m/d)" } },
+      { description: { contains: "wir suchen" } },
+      { description: { contains: "Auftrag" } },
+      { description: { contains: "München" } },
+    ],
+  },
+};
+
 const getGroupJobs = async (groupId: string, options: TPaginationOptions) => {
-  const whereConditions: Prisma.JobWhereInput = {
-    groupId,
-  };
+  // One designated community also surfaces the shared scraped-job pool, which
+  // is otherwise unreachable (scraped jobs carry no groupId). Every other
+  // community keeps showing only what its own members posted.
+  const showsScrapedPool =
+    Boolean(config.scrapedJobsGroupId) &&
+    groupId === config.scrapedJobsGroupId;
+
+  const whereConditions: Prisma.JobWhereInput = showsScrapedPool
+    ? { OR: [{ groupId }, presentableScrapedJob] }
+    : { groupId };
 
   const { page, take, skip, sortBy, orderBy } = calculatePagination(options);
   const jobs = await prisma.job.findMany({

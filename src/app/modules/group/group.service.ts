@@ -81,10 +81,14 @@ const getAllGroups = async (
       },
     },
   });
-  if (query.isPrivate) {
-    andConditions.push({
-      isPrivate: query.isPrivate,
-    });
+  // Query params arrive as strings, so the raw value ("false") is truthy and
+  // would be handed to a Prisma Boolean field — which throws a validation
+  // error. Only filter on an explicit true/false; anything else (absent, empty
+  // or malformed) means "no isPrivate filter".
+  if (query.isPrivate === true || query.isPrivate === "true") {
+    andConditions.push({ isPrivate: true });
+  } else if (query.isPrivate === false || query.isPrivate === "false") {
+    andConditions.push({ isPrivate: false });
   }
   const whereConditions: Prisma.GroupWhereInput =
     andConditions.length > 0 ? { AND: andConditions } : {};
@@ -166,6 +170,7 @@ const getPublicGroups = async (
     select: {
       id: true,
       name: true,
+      description: true,
       image: true,
       createdAt: true,
       chat: {
@@ -238,6 +243,9 @@ const getPublicGroups = async (
   const refinedGroups = groups.map(group => ({
     id: group.id,
     name: group.name,
+    // Community tag pills are encoded in the description
+    // ("Trade: X | Market: Y | Category: Z | Suffix: S") and parsed client-side.
+    description: group.description,
     image: group.image,
     createdAt: group.createdAt,
     chatId: group.chat?.id || null,

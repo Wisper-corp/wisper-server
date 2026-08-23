@@ -9,6 +9,7 @@ const paginationCalculation_1 = require("../../utils/paginationCalculation");
 const job_constant_1 = require("./job.constant");
 const ApiError_1 = __importDefault(require("../../middlewares/classes/ApiError"));
 const sendNotification_1 = require("../../utils/sendNotification");
+const config_1 = __importDefault(require("../../config"));
 const ensureGroupMembership = async (groupId, userId) => {
     const group = await prisma_1.default.group.findUniqueOrThrow({
         where: {
@@ -202,10 +203,41 @@ const getAllJobs = async (options, query) => {
     };
     return { meta, jobs };
 };
+/// Scraped jobs are only fit to show when they carry a company logo and the
+/// title is Latin-script — same bar the main feed applies.
+const presentableScrapedJob = {
+    isScraped: true,
+    companyLogo: { not: null },
+    NOT: {
+        OR: [
+            { companyLogo: "" },
+            { title: { contains: "ü" } },
+            { title: { contains: "ö" } },
+            { title: { contains: "ä" } },
+            { title: { contains: "ß" } },
+            { title: { contains: "é" } },
+            { title: { contains: "è" } },
+            { title: { contains: "ê" } },
+            { title: { contains: "ñ" } },
+            { title: { contains: "ç" } },
+            { title: { contains: "m/w/d" } },
+            { title: { contains: "(m/f/d)" } },
+            { title: { contains: "(f/m/d)" } },
+            { description: { contains: "wir suchen" } },
+            { description: { contains: "Auftrag" } },
+            { description: { contains: "München" } },
+        ],
+    },
+};
 const getGroupJobs = async (groupId, options) => {
-    const whereConditions = {
-        groupId,
-    };
+    // One designated community also surfaces the shared scraped-job pool, which
+    // is otherwise unreachable (scraped jobs carry no groupId). Every other
+    // community keeps showing only what its own members posted.
+    const showsScrapedPool = Boolean(config_1.default.scrapedJobsGroupId) &&
+        groupId === config_1.default.scrapedJobsGroupId;
+    const whereConditions = showsScrapedPool
+        ? { OR: [{ groupId }, presentableScrapedJob] }
+        : { groupId };
     const { page, take, skip, sortBy, orderBy } = (0, paginationCalculation_1.calculatePagination)(options);
     const jobs = await prisma_1.default.job.findMany({
         where: whereConditions,

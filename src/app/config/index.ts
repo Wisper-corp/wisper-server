@@ -7,6 +7,9 @@ export default {
   env: process.env.NODE_ENV,
   port: process.env.PORT,
   generalChatId: process.env.GENERAL_CHAT_ID,
+  // Community whose Jobs tab also surfaces the scraped job pool.
+  // Unset -> no community shows scraped jobs.
+  scrapedJobsGroupId: process.env.SCRAPED_JOBS_GROUP_ID,
   email: {
     emailSendingApi: process.env.SEND_EMAIL_URL,
   },
