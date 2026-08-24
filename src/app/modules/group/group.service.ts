@@ -145,9 +145,27 @@ const getPublicGroups = async (
   query: Record<string, any>,
   authId: string
 ) => {
+  // Home is "the communities I belong to", so a group the caller has joined
+  // belongs in this list even when it is private — otherwise a joined private
+  // community is reachable from nowhere in the app. Explore and search still
+  // only surface public groups, because a private group the caller is *not* a
+  // member of never satisfies either branch.
   const andConditions: Prisma.GroupWhereInput[] = [
     {
-      isPrivate: false,
+      OR: [
+        { isPrivate: false },
+        {
+          chat: {
+            is: {
+              participants: {
+                some: {
+                  authId,
+                },
+              },
+            },
+          },
+        },
+      ],
     },
   ];
 
