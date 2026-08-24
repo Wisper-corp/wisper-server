@@ -53,6 +53,10 @@ model Auth {
   kycBadge                KycVerificationBadge?
 
   @@map("auths")
+  forumPosts     ForumPost[]
+  forumReplies   ForumReply[]
+  forumReactions ForumReaction[]
+
 }
 
 model Otp {
@@ -148,6 +152,55 @@ model Reaction {
   @@map("reactions")
 }
 
+// Forum lives in its own tables rather than on Post: Post is commerce-shaped
+// (price, deliveryTime, currency, boosts) and Comment has no parent, so it
+// cannot carry replies.
+model ForumPost {
+  id        String             @id @default(uuid())
+  authorId  String
+  author    Auth               @relation(fields: [authorId], references: [id])
+  groupId   String
+  group     Group              @relation(fields: [groupId], references: [id])
+  text      String
+  images    String[]
+  isEdited  Boolean            @default(false)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  replies   ForumReply[]
+  reactions ForumReaction[]
+
+  @@index([groupId, createdAt])
+  @@map("forum_posts")
+}
+
+model ForumReply {
+  id        String    @id @default(uuid())
+  postId    String
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    Auth      @relation(fields: [authorId], references: [id])
+  text      String
+  isEdited  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([postId, createdAt])
+  @@map("forum_replies")
+}
+
+// One row per person per post, so "did I react" is answerable per user
+// instead of only as a total.
+model ForumReaction {
+  id        String    @id @default(uuid())
+  postId    String
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authId    String
+  auth      Auth      @relation(fields: [authId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@unique([postId, authId])
+  @@map("forum_reactions")
+}
+
 model Comment {
   id        String   @id @default(uuid())
   authorId  String
@@ -240,6 +293,7 @@ model Group {
   chat            Chat?
   posts           Post[]
   jobs            Job[]
+  forumPosts      ForumPost[]
 
   @@map("groups")
 }

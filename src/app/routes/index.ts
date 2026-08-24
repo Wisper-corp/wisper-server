@@ -10,6 +10,7 @@ import { commentRoutes } from "../modules/comment/comment.routes";
 import { resumeRoutes } from "../modules/resume/resume.routes";
 import { businessRoutes } from "../modules/business/business.routes";
 import { jobRoutes } from "../modules/job/job.routes";
+import { forumRoutes } from "../modules/forum/forum.routes";
 import { favoriteRoutes } from "../modules/favorite/favorite.routes";
 import { connectionRoutes } from "../modules/connection/connection.routes";
 import { chatRoutes } from "../modules/chat/chat.routes";
@@ -44,6 +45,7 @@ const routes = [
   { path: "/resumes", route: resumeRoutes },
   { path: "/businesses", route: businessRoutes },
   { path: "/jobs", route: jobRoutes },
+  { path: "/forum", route: forumRoutes },
   { path: "/favorites", route: favoriteRoutes },
   { path: "/connections", route: connectionRoutes },
   { path: "/recommendations", route: recommendationRoutes },
