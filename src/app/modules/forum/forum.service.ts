@@ -106,6 +106,15 @@ const createForumPost = async (
 ) => {
   await assertMember(payload.groupId, authId);
 
+  // handleZodValidation only runs on multipart when a `payload` field is
+  // present, so a differently shaped request can reach here unvalidated. The
+  // caption is a product rule - images must go with text - so enforce it where
+  // it cannot be skipped.
+  const text = (payload.text ?? "").trim();
+  if (!text) {
+    throw new ApiError(400, "Add a caption to go with your post.");
+  }
+
   if (files && files.length > FORUM_MAX_IMAGES) {
     throw new ApiError(
       400,
@@ -124,7 +133,7 @@ const createForumPost = async (
     data: {
       groupId: payload.groupId,
       authorId: authId,
-      text: payload.text,
+      text,
       images,
     },
     select: {
