@@ -5,6 +5,8 @@ import {
   calculatePagination,
   TPaginationOptions,
 } from "../../utils/paginationCalculation";
+import { TFile } from "../../interface/file.interface";
+import { uploadToS3 } from "../../utils/awss3";
 import { TCreateForumPost, TCreateForumReply } from "./forum.validation";
 
 // The author block every forum row carries. The card shows the poster's
@@ -94,15 +96,36 @@ const getGroupForumPosts = async (
   return { meta: { page, limit: take, total }, posts: shaped };
 };
 
-const createForumPost = async (payload: TCreateForumPost, authId: string) => {
+/// A forum post carries at most this many images.
+export const FORUM_MAX_IMAGES = 4;
+
+const createForumPost = async (
+  payload: TCreateForumPost,
+  authId: string,
+  files?: TFile[]
+) => {
   await assertMember(payload.groupId, authId);
+
+  if (files && files.length > FORUM_MAX_IMAGES) {
+    throw new ApiError(
+      400,
+      `You can attach up to ${FORUM_MAX_IMAGES} images.`
+    );
+  }
+
+  const images: string[] = [];
+  if (files && files.length) {
+    for (const file of files) {
+      images.push(await uploadToS3(file));
+    }
+  }
 
   const post = await prisma.forumPost.create({
     data: {
       groupId: payload.groupId,
       authorId: authId,
       text: payload.text,
-      images: payload.images ?? [],
+      images,
     },
     select: {
       id: true,

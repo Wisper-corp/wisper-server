@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { UserRole } from "@prisma/client";
 import authorize from "../../middlewares/authorize";
+import { upload } from "../../utils/awss3";
 import handleZodValidation from "../../middlewares/handleZodValidation";
 import { forumController } from "./forum.controller";
 import { createForumPostZod, createForumReplyZod } from "./forum.validation";
@@ -16,7 +17,8 @@ router.get(
 router.post(
   "/",
   authorize(UserRole.PERSON, UserRole.BUSINESS),
-  handleZodValidation(createForumPostZod),
+  upload.array("images"),
+  handleZodValidation(createForumPostZod, { formData: true }),
   forumController.createForumPost
 );
 

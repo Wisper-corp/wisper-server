@@ -18,7 +18,11 @@ const getGroupForumPosts = handleAsyncRequest(async (req: TRequest, res) => {
 });
 
 const createForumPost = handleAsyncRequest(async (req: TRequest, res) => {
-  const result = await forumServices.createForumPost(req.body, req.user!.id);
+  const result = await forumServices.createForumPost(
+    req.body,
+    req.user!.id,
+    req.files as never
+  );
   sendResponse(res, {
     message: "Posted to the forum!",
     data: result,
