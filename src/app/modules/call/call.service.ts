@@ -106,10 +106,10 @@ const getMyCalls = async (
       duration: true,
       mode: true,
       date: true,
+      // Every participant, not "the caller or me": on an outgoing call the
+      // caller IS me, so that filter collapsed to a single row and the log
+      // showed the user their own name instead of who they rang.
       participants: {
-        where: {
-          OR: [{ role: CallRole.CALLER }, { authId: userId }],
-        },
         select: {
           status: true,
           auth: {
@@ -141,12 +141,23 @@ const getMyCalls = async (
     where: whereConditions,
   });
 
+  // The app reads its own status from the first participant and then picks the
+  // other party as "the one whose status differs", so the caller's own row has
+  // to come first.
+  const ordered = calls.map(call => ({
+    ...call,
+    participants: [
+      ...call.participants.filter(p => p.auth?.id === userId),
+      ...call.participants.filter(p => p.auth?.id !== userId),
+    ],
+  }));
+
   const meta = {
     page,
     limit: take,
     total,
   };
-  return { meta, calls };
+  return { meta, calls: ordered };
 };
 
 const endCall = async (userId: string, callId: string) => {

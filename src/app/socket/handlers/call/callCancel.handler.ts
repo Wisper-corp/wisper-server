@@ -1,4 +1,4 @@
-import { CallRole, CallStatus } from "@prisma/client";
+import { CallParticipantStatus, CallRole, CallStatus } from "@prisma/client";
 import ApiError from "../../../middlewares/classes/ApiError";
 import prisma from "../../../utils/prisma";
 import { TAckFn, TSocket } from "../../interface/socket.interface";
@@ -76,6 +76,20 @@ export const callCancel = eventHandler<TCallCancelPayload>(
       },
       data: {
         leftAt: now,
+      },
+    });
+
+    // A caller who hangs up before anyone answers is the commonest missed
+    // call, and it was not being recorded: only an explicit decline set
+    // MISSED, so these calls never reached the receiver's Missed Calls tab.
+    await prisma.callParticipant.updateMany({
+      where: {
+        callId: call.id,
+        role: CallRole.RECEIVER,
+        status: CallParticipantStatus.INCOMING,
+      },
+      data: {
+        status: CallParticipantStatus.MISSED,
       },
     });
 
