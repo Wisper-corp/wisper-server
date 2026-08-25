@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { ChatRole, Prisma } from "@prisma/client";
 import ApiError from "../../middlewares/classes/ApiError";
 import prisma from "../../utils/prisma";
 import {
@@ -29,6 +29,22 @@ const shapeAuthor = (auth: {
   image: auth.person?.image || auth.business?.image || null,
   title: auth.person?.title || auth.business?.industry || null,
 });
+
+// Admins and moderators police the forum; a plain member can only remove
+// their own post.
+const MODERATOR_ROLES = ["ADMIN", "MODERATOR"] as const;
+
+const moderatorRoleIn = async (groupId: string, authId: string) => {
+  const participant = await prisma.chatParticipant.findFirst({
+    where: {
+      authId,
+      chat: { groupId },
+      role: { in: MODERATOR_ROLES as unknown as ChatRole[] },
+    },
+    select: { role: true },
+  });
+  return participant?.role ?? null;
+};
 
 const assertMember = async (groupId: string, authId: string) => {
   const participant = await prisma.chatParticipant.findFirst({
@@ -76,6 +92,10 @@ const getGroupForumPosts = async (
 
   const total = await prisma.forumPost.count({ where });
 
+  // Resolved once per request rather than per row, and sent down so the app
+  // never has to reimplement the rule.
+  const canModerate = (await moderatorRoleIn(groupId, authId)) !== null;
+
   const shaped = posts.map(post => ({
     id: post.id,
     text: post.text,
@@ -87,6 +107,7 @@ const getGroupForumPosts = async (
     reactionCount: post._count.reactions,
     hasReacted: post.reactions.length > 0,
     isMine: post.author.id === authId,
+    canDelete: post.author.id === authId || canModerate,
     replyAvatars: post.replies.map(reply => ({
       id: reply.author.id,
       image: reply.author.person?.image || reply.author.business?.image || null,
@@ -153,6 +174,7 @@ const createForumPost = async (
     reactionCount: 0,
     hasReacted: false,
     isMine: true,
+    canDelete: true,
     replyAvatars: [],
   };
 };
@@ -165,11 +187,13 @@ const deleteForumPost = async (postId: string, authId: string) => {
   if (!post) throw new ApiError(404, "Post not found.");
 
   if (post.authorId !== authId) {
-    const admin = await prisma.chatParticipant.findFirst({
-      where: { authId, chat: { groupId: post.groupId }, role: "ADMIN" },
-      select: { id: true },
-    });
-    if (!admin) throw new ApiError(403, "You can only delete your own posts.");
+    const role = await moderatorRoleIn(post.groupId, authId);
+    if (!role) {
+      throw new ApiError(
+        403,
+        "Only the author, an admin or a moderator can delete this post."
+      );
+    }
   }
 
   await prisma.forumPost.delete({ where: { id: postId } });
