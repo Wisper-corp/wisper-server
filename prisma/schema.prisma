@@ -346,6 +346,9 @@ model Group {
   name            String
   description     String?
   isPrivate       Boolean  @default(true)
+  // Hand-picked for Explore. A featured community is suggested regardless of
+  // size; everything else still has to clear the member floor.
+  isFeatured      Boolean  @default(false)
   allowInvitation Boolean  @default(false)
   image           String?
   createdAt       DateTime @default(now())

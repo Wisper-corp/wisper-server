@@ -191,6 +191,7 @@ const getPublicGroups = async (
       description: true,
       image: true,
       createdAt: true,
+      isFeatured: true,
       chat: {
         select: {
           id: true,
@@ -266,6 +267,8 @@ const getPublicGroups = async (
     description: group.description,
     image: group.image,
     createdAt: group.createdAt,
+    // Hand-picked for Explore: shown regardless of member count.
+    isFeatured: group.isFeatured,
     chatId: group.chat?.id || null,
     isJoined: joinedGroupIds.has(group.id),
     memberCount: group.chat?._count.participants || 0,

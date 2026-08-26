@@ -88,4 +88,11 @@ router.patch(
   groupController.toggleGroupInvitationAccess
 );
 
+// Curating Explore is an admin action.
+router.patch(
+  "/featured/:id",
+  authorize(UserRole.ADMIN),
+  groupController.toggleGroupFeatured
+);
+
 export const groupRoutes = router;

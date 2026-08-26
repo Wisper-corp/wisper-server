@@ -5,6 +5,7 @@ import pick from "../../utils/pick";
 import { sendResponse } from "../../utils/sendResponse";
 import { groupServices } from "./group.service";
 import prisma from "../../utils/prisma";
+import ApiError from "../../middlewares/classes/ApiError";
 
 const createGroup = handleAsyncRequest(async (req: TRequest, res) => {
   const result = await groupServices.createGroup(req.body, req.user!.id);
@@ -137,6 +138,25 @@ const updateGroupTags = handleAsyncRequest(async (req: TRequest, res) => {
   sendResponse(res, { message: "Group tags updated!", data: result });
 });
 
+const toggleGroupFeatured = handleAsyncRequest(async (req: TRequest, res) => {
+  const groupId = req.params.id as string;
+  const { isFeatured } = req.body as { isFeatured?: boolean };
+  if (typeof isFeatured !== "boolean") {
+    throw new ApiError(400, "isFeatured must be true or false.");
+  }
+  const result = await prisma.group.update({
+    where: { id: groupId },
+    data: { isFeatured },
+    select: { id: true, name: true, isFeatured: true },
+  });
+  sendResponse(res, {
+    message: result.isFeatured
+      ? "Community will show on Explore."
+      : "Community removed from Explore suggestions.",
+    data: result,
+  });
+});
+
 export const groupController = {
   createGroup,
   getAllGroups,
@@ -150,4 +170,5 @@ export const groupController = {
   toggleGroupVisibility,
   toggleGroupInvitationAccess,
   getGroupMembers,
+  toggleGroupFeatured,
 };
