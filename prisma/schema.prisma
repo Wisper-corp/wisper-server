@@ -65,6 +65,9 @@ model Auth {
 
   agentPersona   AgentPersona?
 
+  moderationVerdicts ModerationVerdict[]
+  suspensions        MemberSuspension[]
+
 }
 
 model Otp {
@@ -282,6 +285,8 @@ model AgentPersona {
 
   // Only active agents post; the rest exist to make the member count real.
   isActive  Boolean  @default(false)
+  // The community's bot moderator. At most one per community.
+  isModerator Boolean @default(false)
   // Paused by an admin - keeps the account and its history, stops the posting.
   isPaused  Boolean  @default(false)
 
@@ -318,6 +323,64 @@ model AgentActivity {
 
   @@index([groupId, createdAt])
   @@map("agent_activities")
+}
+
+enum ModerationDecision {
+  ALLOWED
+  FLAGGED
+  REMOVED
+}
+
+enum ModerationTarget {
+  POST
+  REPLY
+}
+
+// What the moderator decided about one piece of content, and why. Written for
+// every decision including ALLOWED, so an admin asking "why is this still up"
+// gets an answer rather than silence.
+model ModerationVerdict {
+  id         String             @id @default(uuid())
+  groupId    String
+  authorId   String
+  author     Auth               @relation(fields: [authorId], references: [id])
+  target     ModerationTarget
+  // Kept as a plain id: the row it points at may already be gone.
+  targetId   String?
+  decision   ModerationDecision
+  // Which rules it broke: promotional, scam, abusive, and so on.
+  categories String[]
+  // 0-1. Drives remove vs flag vs allow.
+  confidence Float
+  reason     String
+  // The text as submitted, so a removed post can still be reviewed.
+  content    String
+  // Set when an admin has dealt with a flagged item.
+  reviewedAt DateTime?
+  reviewedBy String?
+  createdAt  DateTime           @default(now())
+
+  @@index([groupId, createdAt])
+  @@index([groupId, decision])
+  @@map("moderation_verdicts")
+}
+
+// A temporary posting ban. Expiry is a timestamp rather than a flag, so a
+// suspension lifts itself and nothing has to run to clear it.
+model MemberSuspension {
+  id        String   @id @default(uuid())
+  authId    String
+  auth      Auth     @relation(fields: [authId], references: [id])
+  groupId   String
+  until     DateTime
+  reason    String
+  // The moderator account, bot or human.
+  issuedBy  String?
+  liftedAt  DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([authId, groupId, until])
+  @@map("member_suspensions")
 }
 
 model Comment {

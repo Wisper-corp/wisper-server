@@ -14,6 +14,10 @@ import {
   TCreateForumReply,
 } from "./forum.validation";
 import { sendNotificationToUser } from "../../utils/sendNotification";
+import {
+  activeSuspension,
+  screenContent,
+} from "../moderation/moderation.service";
 
 // The author block every forum row carries. The card shows the poster's
 // professional title under their name, so it has to come back with the post.
@@ -96,6 +100,13 @@ const shapePoll = (poll: RawPoll, myOptionId: string | null) => {
       percent: total === 0 ? 0 : Math.round((o._count.votes / total) * 100),
     })),
   };
+};
+
+/// Returns the message to show a suspended member, or null if they may post.
+const assertNotSuspended = async (groupId: string, authId: string) => {
+  const suspension = await activeSuspension(authId, groupId);
+  if (!suspension) return null;
+  return `You cannot post in this community until ${suspension.until.toUTCString()}. Reason: ${suspension.reason}`;
 };
 
 const assertMember = async (groupId: string, authId: string) => {
@@ -206,6 +217,10 @@ const createForumPost = async (
     throw new ApiError(400, "Add a caption to go with your post.");
   }
 
+  // A suspended member cannot post, and is told why and until when.
+  const suspended = await assertNotSuspended(payload.groupId, authId);
+  if (suspended) throw new ApiError(403, suspended);
+
   if (files && files.length > FORUM_MAX_IMAGES) {
     throw new ApiError(
       400,
@@ -235,6 +250,17 @@ const createForumPost = async (
     if (seen.size !== rawOptions.length) {
       throw new ApiError(400, "Poll options must be different from each other.");
     }
+  }
+
+  // Screened before it is written, so spam never appears at all.
+  const screening = await screenContent({
+    groupId: payload.groupId,
+    authorId: authId,
+    content: text,
+    target: "POST",
+  });
+  if (!screening.allowed) {
+    throw new ApiError(403, screening.message ?? "This post was removed.");
   }
 
   const post = await prisma.forumPost.create({
@@ -409,6 +435,19 @@ const createForumReply = async (
   if (!post) throw new ApiError(404, "Post not found.");
 
   await assertMember(post.groupId, authId);
+
+  const suspendedReply = await assertNotSuspended(post.groupId, authId);
+  if (suspendedReply) throw new ApiError(403, suspendedReply);
+
+  const replyScreening = await screenContent({
+    groupId: post.groupId,
+    authorId: authId,
+    content: payload.text,
+    target: "REPLY",
+  });
+  if (!replyScreening.allowed) {
+    throw new ApiError(403, replyScreening.message ?? "This reply was removed.");
+  }
 
   const reply = await prisma.forumReply.create({
     data: { postId, authorId: authId, text: payload.text },
