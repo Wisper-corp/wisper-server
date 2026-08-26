@@ -18,6 +18,9 @@ import { agentServices, agentsRemainingToday } from "./agent.service";
 /** Quiet hours, server time. Nobody posts at 4am. */
 const ACTIVE_HOURS = { from: 7, to: 23 };
 
+const sleep = (ms: number) =>
+  new Promise<void>(resolve => setTimeout(resolve, ms));
+
 /**
  * The daily volume is not a constant here - it is however many active agents
  * a community has, because each of them posts exactly once a day. Five active
@@ -48,6 +51,11 @@ export const runAgentTick = async (): Promise<void> => {
       // last agent still gets its turn.
       const hoursLeft = Math.max(1, ACTIVE_HOURS.to - hour);
       if (Math.random() > Math.min(1, stillOwed / hoursLeft)) continue;
+
+      // The tick fires on the hour, so acting immediately would stamp every
+      // post at HH:00 - a giveaway however well the hours are spread. Wait a
+      // random part of the hour first.
+      await sleep(Math.floor(Math.random() * 55 * 60_000));
 
       // Answering a real member always beats another bot monologue.
       const replied = await agentServices.runReplyToUnanswered(groupId);
