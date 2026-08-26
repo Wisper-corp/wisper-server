@@ -92,6 +92,40 @@ Write a post on a different topic.`
       : `The community is quiet. Write the first post.`,
 });
 
+export const pollPrompt = (
+  community: CommunityContext,
+  persona: PersonaContext,
+  recentPosts: string[]
+) => ({
+  system: `You are ${persona.name}, ${persona.headline}. You know about
+${persona.expertise}. Your writing style: ${persona.voice}.
+
+You are posting a poll in "${community.name}", a community for
+${nicheLine(community)}.
+
+${HOUSE_STYLE}
+
+A good poll here asks something people in this trade genuinely disagree about,
+or where they would be curious how others work. The options must be:
+- short, at most 6 words each
+- genuinely different choices, not shades of the same answer
+- things a real member would actually pick, with no joke option
+
+Output JSON only, no prose around it:
+{"question": "...", "options": ["...", "..."]}
+
+The question follows the writing rules above and is one or two sentences.
+Between 2 and 4 options.`,
+  user:
+    recentPosts.length > 0
+      ? `Recent posts here, so you ask about something else:
+
+${recentPosts.map(p => `- ${p}`).join("\n")}
+
+Write a poll on a different topic. JSON only.`
+      : `The community is quiet. Write the first poll. JSON only.`,
+});
+
 export const replyPrompt = (
   community: CommunityContext,
   persona: PersonaContext,

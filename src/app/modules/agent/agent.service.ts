@@ -13,6 +13,7 @@ import {
 import {
   CommunityContext,
   personaBatchPrompt,
+  pollPrompt,
   replyPrompt,
   startDiscussionPrompt,
 } from "./agent.prompts";
@@ -67,6 +68,15 @@ const AGENT_EMAIL_DOMAIN = "agents.wisperonline.internal";
 
 /** How many recent posts an agent reads before writing, to avoid repeating. */
 const CONTEXT_POSTS = 8;
+
+/**
+ * How often a new discussion is a poll instead of plain text.
+ *
+ * Roughly one in three: often enough to pull people in, rare enough that the
+ * forum does not read as a run of surveys. A poll is one API call like any
+ * other post, so this changes the mix, not the volume.
+ */
+const POLL_CHANCE = 1 / 3;
 
 /** The model writes personas in batches; small enough to stay coherent. */
 const PERSONA_BATCH = 12;
@@ -331,28 +341,106 @@ const runStartDiscussion = async (groupId: string) => {
     recent
   );
 
+  const asPoll = Math.random() < POLL_CHANCE;
+
   try {
-    const text = (
-      await askAi({
-        system: prompt.system,
-        messages: [{ role: "user", content: prompt.user }],
-        maxTokens: 300,
+    let text: string;
+    let options: string[] = [];
+
+    if (asPoll) {
+      const p = pollPrompt(
+        context,
+        {
+          name: persona.auth.person?.name ?? "A member",
+          headline: persona.headline,
+          expertise: persona.expertise,
+          voice: persona.voice,
+        },
+        recent
+      );
+      const draft = await askAiForJson<{
+        question?: string;
+        options?: string[];
+      }>({
+        system: p.system,
+        messages: [{ role: "user", content: p.user }],
+        maxTokens: 400,
         temperature: 1,
-      })
-    ).replace(/^["']|["']$/g, "");
+      });
+
+      const cleaned = (draft.options ?? [])
+        .map(o => String(o).trim())
+        .filter(o => o.length > 0 && o.length <= 120);
+      // Drop options that differ only by case, which the model does produce.
+      const unique = cleaned.filter(
+        (o, i) => cleaned.findIndex(x => x.toLowerCase() === o.toLowerCase()) === i
+      );
+
+      // A malformed poll becomes a plain post rather than a failed turn - the
+      // agent still owes the community something today.
+      if ((draft.question ?? "").trim() && unique.length >= 2) {
+        text = draft.question!.trim();
+        options = unique.slice(0, 4);
+      } else {
+        text = (
+          await askAi({
+            system: prompt.system,
+            messages: [{ role: "user", content: prompt.user }],
+            maxTokens: 300,
+            temperature: 1,
+          })
+        ).replace(/^["']|["']$/g, "");
+      }
+    } else {
+      text = (
+        await askAi({
+          system: prompt.system,
+          messages: [{ role: "user", content: prompt.user }],
+          maxTokens: 300,
+          temperature: 1,
+        })
+      ).replace(/^["']|["']$/g, "");
+    }
 
     const post = await prisma.forumPost.create({
-      data: { groupId, authorId: persona.auth.id, text, images: [] },
+      data: {
+        groupId,
+        authorId: persona.auth.id,
+        text,
+        images: [],
+        ...(options.length
+          ? {
+              poll: {
+                create: {
+                  options: {
+                    create: options.map((t, position) => ({
+                      text: t,
+                      position,
+                    })),
+                  },
+                },
+              },
+            }
+          : {}),
+      },
       select: { id: true, text: true },
     });
     await prisma.agentPersona.update({
       where: { id: persona.id },
       data: { lastPostedAt: new Date() },
     });
-    await log(persona.id, groupId, "POST", text.slice(0, 200), {
+    await log(
+      persona.id,
+      groupId,
+      "POST",
+      `${options.length ? `[poll] ` : ""}${text.slice(0, 200)}`,
+      { postId: post.id }
+    );
+    return {
       postId: post.id,
-    });
-    return { postId: post.id, text: post.text };
+      text: post.text,
+      pollOptions: options.length ? options : undefined,
+    };
   } catch (error) {
     await log(persona.id, groupId, "FAILED", "Could not write a post", {
       detail: error instanceof Error ? error.message : String(error),
