@@ -18,11 +18,11 @@ import { agentServices } from "./agent.service";
 /** Quiet hours, server time. Nobody posts at 4am. */
 const ACTIVE_HOURS = { from: 7, to: 23 };
 
-/** Chance of acting in any given hour, so cadence looks human. */
-const ACT_PROBABILITY = 0.45;
+/** The floor the community asked for: at least this many items a day. */
+const TARGET_PER_DAY = 5;
 
-/** Never exceed this many agent items per community per day. */
-const DAILY_CAP = 6;
+/** And never more than this, so the forum is not flooded. */
+const MAX_PER_DAY = 8;
 
 const usedToday = async (groupId: string) => {
   const since = new Date();
@@ -45,8 +45,19 @@ export const runAgentTick = async (): Promise<void> => {
 
   for (const { groupId } of groups) {
     try {
-      if ((await usedToday(groupId)) >= DAILY_CAP) continue;
-      if (Math.random() > ACT_PROBABILITY) continue;
+      const done = await usedToday(groupId);
+      if (done >= MAX_PER_DAY) continue;
+
+      // Hit the daily target without posting on a timetable. While there is
+      // more slack than work left, act only sometimes; once the hours left
+      // barely cover the posts still owed, act every hour. The result is
+      // irregular timing that still reliably clears TARGET_PER_DAY.
+      const hoursLeft = Math.max(0, ACTIVE_HOURS.to - hour);
+      const stillOwed = Math.max(0, TARGET_PER_DAY - done);
+      if (hoursLeft > 0 && stillOwed < hoursLeft) {
+        const pressure = stillOwed / hoursLeft;
+        if (Math.random() > Math.max(0.25, pressure)) continue;
+      }
 
       // Answering a real member always beats another bot monologue.
       const replied = await agentServices.runReplyToUnanswered(groupId);

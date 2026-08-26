@@ -16,6 +16,19 @@ import {
   startDiscussionPrompt,
 } from "./agent.prompts";
 
+/**
+ * Avatar for an agent.
+ *
+ * DiceBear renders a deterministic illustrated portrait from a seed, so the
+ * same agent keeps the same face forever and no real person's photograph is
+ * ever used. Free, no key, no upload step. Swap this one function if you would
+ * rather host real images later.
+ */
+const avatarFor = (name: string) =>
+  `https://api.dicebear.com/9.x/notionists/png?seed=${encodeURIComponent(
+    name
+  )}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf&radius=50&size=256`;
+
 /** Agent accounts get an address that can never collide with a real signup. */
 const AGENT_EMAIL_DOMAIN = "agents.wisperonline.internal";
 
@@ -155,7 +168,12 @@ const seedAgents = async (
           },
         });
         await tn.person.create({
-          data: { email, name: p.name, title: p.headline },
+          data: {
+            email,
+            name: p.name,
+            title: p.headline,
+            image: avatarFor(p.name),
+          },
         });
         await tn.chatParticipant.create({
           data: {
