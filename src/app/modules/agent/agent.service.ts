@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import ApiError from "../../middlewares/classes/ApiError";
 import prisma from "../../utils/prisma";
+import { uploadToS3 } from "../../utils/awss3";
 import {
   AiNotConfiguredError,
   askAi,
@@ -19,15 +20,47 @@ import {
 /**
  * Avatar for an agent.
  *
- * DiceBear renders a deterministic illustrated portrait from a seed, so the
- * same agent keeps the same face forever and no real person's photograph is
- * ever used. Free, no key, no upload step. Swap this one function if you would
- * rather host real images later.
+ * The portrait is generated deterministically from the agent's name (so the
+ * same agent keeps the same face forever, and no real person's photograph is
+ * ever used) and then copied into our own S3 bucket. Serving it from the same
+ * place as every other user image means a member's avatar never depends on a
+ * third-party service being reachable when the app renders the feed.
+ *
+ * Returns null if generation or upload fails - the app already falls back to
+ * initials, and a missing picture must never abort creating the member.
  */
-const avatarFor = (name: string) =>
+const avatarSourceUrl = (name: string) =>
   `https://api.dicebear.com/9.x/notionists/png?seed=${encodeURIComponent(
     name
   )}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf&radius=50&size=256`;
+
+const buildAvatar = async (name: string): Promise<string | null> => {
+  try {
+    const res = await fetch(avatarSourceUrl(name));
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (!buffer.length) return null;
+
+    const slug =
+      name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ||
+      "member";
+
+    return await uploadToS3({
+      fieldname: "image",
+      originalname: `${slug}.png`,
+      encoding: "7bit",
+      mimetype: "image/png",
+      destination: "",
+      filename: `${slug}.png`,
+      path: "",
+      size: buffer.length,
+      buffer,
+    });
+  } catch (error) {
+    console.error(`Could not build an avatar for ${name}`, error);
+    return null;
+  }
+};
 
 /** Agent accounts get an address that can never collide with a real signup. */
 const AGENT_EMAIL_DOMAIN = "agents.wisperonline.internal";
@@ -155,6 +188,9 @@ const seedAgents = async (
     // Stagger joins across the past 90 days so they do not all appear at once.
     const joinedAt = new Date(now - Math.floor(Math.random() * 90) * 86_400_000);
 
+    // Built before the transaction: a network call has no business inside one.
+    const image = await buildAvatar(p.name);
+
     try {
       await prisma.$transaction(async tn => {
         const auth = await tn.auth.create({
@@ -172,7 +208,7 @@ const seedAgents = async (
             email,
             name: p.name,
             title: p.headline,
-            image: avatarFor(p.name),
+            image,
           },
         });
         await tn.chatParticipant.create({
@@ -481,6 +517,34 @@ const removeAgents = async (groupId: string) => {
   return { removed: authIds.length };
 };
 
+/**
+ * Re-hosts any agent avatar still pointing at the generator, so existing
+ * agents stop depending on a third-party service at render time. Safe to run
+ * repeatedly - it only touches rows that still hold an external URL.
+ */
+const rehostAvatars = async (groupId: string) => {
+  const personas = await prisma.agentPersona.findMany({
+    where: { groupId },
+    select: { auth: { select: { email: true, person: { select: { name: true, image: true } } } } },
+  });
+
+  let moved = 0;
+  let skipped = 0;
+  for (const { auth } of personas) {
+    const person = auth.person;
+    if (!person?.name) continue;
+    if (person.image && !person.image.includes("dicebear")) {
+      skipped++;
+      continue;
+    }
+    const image = await buildAvatar(person.name);
+    if (!image) continue;
+    await prisma.person.update({ where: { email: auth.email }, data: { image } });
+    moved++;
+  }
+  return { moved, skipped };
+};
+
 export const agentServices = {
   seedAgents,
   runStartDiscussion,
@@ -489,5 +553,6 @@ export const agentServices = {
   setAgentPaused,
   activityLog,
   removeAgents,
+  rehostAvatars,
   communityContextFrom,
 };
