@@ -36,6 +36,22 @@ export default {
     secret_key: process.env.STRIPE_SECRET_KEY,
     callback_endpoint: process.env.PAYMENT_CALLBACK_ENDPOINT,
   },
+  // AI provider. Deliberately generic: swapping DeepSeek for Anthropic (or any
+  // OpenAI-compatible host) is an env change, not a code change.
+  //   AI_PROVIDER   deepseek | anthropic | openai | openai-compatible
+  //   AI_API_KEY    the provider's key
+  //   AI_MODEL      model id; defaults per provider below
+  //   AI_BASE_URL   only for openai-compatible hosts
+  ai: {
+    provider: (process.env.AI_PROVIDER || "deepseek").toLowerCase(),
+    apiKey: process.env.AI_API_KEY || "",
+    model:
+      process.env.AI_MODEL ||
+      (process.env.AI_PROVIDER === "anthropic"
+        ? "claude-opus-5"
+        : "deepseek-chat"),
+    baseUrl: process.env.AI_BASE_URL || "https://api.deepseek.com",
+  },
   agora: {
     appId: process.env.AGORA_APP_ID,
     appCertificate: process.env.AGORA_APP_CERTIFICATE,

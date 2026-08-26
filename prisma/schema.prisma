@@ -16,6 +16,9 @@ model Auth {
   status                  UserStatus               @default(PENDING)
   loginProvider           LoginProvider            @default(EMAIL)
   allowNotifications      Boolean                  @default(true)
+  // Marks an AI-operated account. Never inferred - always set explicitly at
+  // creation - so agents stay findable in your own data forever.
+  isAgent                 Boolean                  @default(false)
   fcmToken                String?
   voipToken               String?
   deviceType              String?
@@ -59,6 +62,8 @@ model Auth {
 
   forumPollVotes ForumPollVote[]
   forumFollows   ForumPostFollow[]
+
+  agentPersona   AgentPersona?
 
 }
 
@@ -260,6 +265,61 @@ model ForumPostFollow {
   @@map("forum_post_follows")
 }
 
+// An AI community member. The persona is generated once and then reused for
+// every post, so the same agent sounds like the same person over time - the
+// single biggest thing that makes seeded activity read as real.
+model AgentPersona {
+  id        String   @id @default(uuid())
+  authId    String   @unique
+  auth      Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  // What this person does and how they write. Fed into every prompt.
+  headline  String
+  expertise String
+  voice     String
+
+  // Only active agents post; the rest exist to make the member count real.
+  isActive  Boolean  @default(false)
+  // Paused by an admin - keeps the account and its history, stops the posting.
+  isPaused  Boolean  @default(false)
+
+  lastPostedAt DateTime?
+  createdAt    DateTime @default(now())
+
+  activities AgentActivity[]
+
+  @@index([groupId, isActive])
+  @@map("agent_personas")
+}
+
+enum AgentActivityKind {
+  POST
+  REPLY
+  SKIPPED
+  FAILED
+}
+
+// Every decision an agent makes, kept so an admin can see what the AI did and
+// why - and so a bad run can be traced rather than guessed at.
+model AgentActivity {
+  id        String            @id @default(uuid())
+  personaId String
+  persona   AgentPersona      @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  groupId   String
+  kind      AgentActivityKind
+  // The forum post created or replied to, when there is one.
+  postId    String?
+  summary   String
+  // Populated for SKIPPED and FAILED so failures are legible.
+  detail    String?
+  createdAt DateTime          @default(now())
+
+  @@index([groupId, createdAt])
+  @@map("agent_activities")
+}
+
 model Comment {
   id        String   @id @default(uuid())
   authorId  String
@@ -356,6 +416,7 @@ model Group {
   posts           Post[]
   jobs            Job[]
   forumPosts      ForumPost[]
+  agentPersonas   AgentPersona[]
 
   @@map("groups")
 }
