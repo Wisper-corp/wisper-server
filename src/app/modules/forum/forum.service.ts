@@ -7,7 +7,13 @@ import {
 } from "../../utils/paginationCalculation";
 import { TFile } from "../../interface/file.interface";
 import { uploadToS3 } from "../../utils/awss3";
-import { TCreateForumPost, TCreateForumReply } from "./forum.validation";
+import {
+  FORUM_POLL_MAX_OPTIONS,
+  FORUM_POLL_MIN_OPTIONS,
+  TCreateForumPost,
+  TCreateForumReply,
+} from "./forum.validation";
+import { sendNotificationToUser } from "../../utils/sendNotification";
 
 // The author block every forum row carries. The card shows the poster's
 // professional title under their name, so it has to come back with the post.
@@ -46,6 +52,52 @@ const moderatorRoleIn = async (groupId: string, authId: string) => {
   return participant?.role ?? null;
 };
 
+// The poll block every forum row carries, shaped so the card can draw bars
+// without a second request.
+const pollSelect = {
+  select: {
+    id: true,
+    options: {
+      orderBy: { position: "asc" as const },
+      select: {
+        id: true,
+        text: true,
+        position: true,
+        _count: { select: { votes: true } },
+      },
+    },
+  },
+};
+
+type RawPoll = {
+  id: string;
+  options: {
+    id: string;
+    text: string;
+    position: number;
+    _count: { votes: number };
+  }[];
+} | null;
+
+const shapePoll = (poll: RawPoll, myOptionId: string | null) => {
+  if (!poll) return null;
+  const total = poll.options.reduce((sum, o) => sum + o._count.votes, 0);
+  return {
+    id: poll.id,
+    totalVotes: total,
+    // Which option this viewer picked, so the card can mark it without
+    // the client having to work it out.
+    myOptionId,
+    options: poll.options.map(o => ({
+      id: o.id,
+      text: o.text,
+      votes: o._count.votes,
+      // Rounded here so every client shows the same number.
+      percent: total === 0 ? 0 : Math.round((o._count.votes / total) * 100),
+    })),
+  };
+};
+
 const assertMember = async (groupId: string, authId: string) => {
   const participant = await prisma.chatParticipant.findFirst({
     where: { authId, chat: { groupId } },
@@ -78,6 +130,9 @@ const getGroupForumPosts = async (
       // Who reacted, limited to the caller, so the heart can render filled
       // without a second round trip.
       reactions: { where: { authId }, select: { id: true }, take: 1 },
+      poll: pollSelect,
+      // This viewer's vote and follow state, fetched with the row.
+      followers: { where: { authId }, select: { id: true }, take: 1 },
       // Avatars for the "12 replies" stack.
       replies: {
         take: 3,
@@ -96,6 +151,19 @@ const getGroupForumPosts = async (
   // never has to reimplement the rule.
   const canModerate = (await moderatorRoleIn(groupId, authId)) !== null;
 
+  // One query for every poll this viewer has voted in, rather than one per row.
+  const pollIds = posts
+    .map(p => p.poll?.id)
+    .filter((id): id is string => Boolean(id));
+  const myVotes = new Map<string, string>();
+  if (pollIds.length) {
+    const votes = await prisma.forumPollVote.findMany({
+      where: { authId, pollId: { in: pollIds } },
+      select: { pollId: true, optionId: true },
+    });
+    for (const v of votes) myVotes.set(v.pollId, v.optionId);
+  }
+
   const shaped = posts.map(post => ({
     id: post.id,
     text: post.text,
@@ -106,6 +174,8 @@ const getGroupForumPosts = async (
     replyCount: post._count.replies,
     reactionCount: post._count.reactions,
     hasReacted: post.reactions.length > 0,
+    isFollowing: post.followers.length > 0,
+    poll: shapePoll(post.poll as RawPoll, myVotes.get(post.poll?.id ?? "") ?? null),
     isMine: post.author.id === authId,
     canDelete: post.author.id === authId || canModerate,
     replyAvatars: post.replies.map(reply => ({
@@ -150,12 +220,43 @@ const createForumPost = async (
     }
   }
 
+  const rawOptions = (payload.pollOptions ?? [])
+    .map(o => o.trim())
+    .filter(o => o.length > 0);
+
+  if (payload.pollOptions !== undefined) {
+    if (rawOptions.length < FORUM_POLL_MIN_OPTIONS) {
+      throw new ApiError(400, "A poll needs at least two options.");
+    }
+    if (rawOptions.length > FORUM_POLL_MAX_OPTIONS) {
+      throw new ApiError(400, "A poll can have at most ten options.");
+    }
+    const seen = new Set(rawOptions.map(o => o.toLowerCase()));
+    if (seen.size !== rawOptions.length) {
+      throw new ApiError(400, "Poll options must be different from each other.");
+    }
+  }
+
   const post = await prisma.forumPost.create({
     data: {
       groupId: payload.groupId,
       authorId: authId,
       text,
       images,
+      ...(rawOptions.length
+        ? {
+            poll: {
+              create: {
+                options: {
+                  create: rawOptions.map((text, position) => ({
+                    text,
+                    position,
+                  })),
+                },
+              },
+            },
+          }
+        : {}),
     },
     select: {
       id: true,
@@ -164,12 +265,15 @@ const createForumPost = async (
       isEdited: true,
       createdAt: true,
       author: authorSelect,
+      poll: pollSelect,
     },
   });
 
   return {
     ...post,
     author: shapeAuthor(post.author),
+    poll: shapePoll(post.poll as RawPoll, null),
+    isFollowing: false,
     replyCount: 0,
     reactionCount: 0,
     hasReacted: false,
@@ -251,6 +355,48 @@ const getForumReplies = async (postId: string, options: TPaginationOptions) => {
   };
 };
 
+/// Tells the post author and anyone following it that a reply landed. Fired
+/// without awaiting: a notification failure must never fail the reply itself.
+const notifyFollowers = async (
+  postId: string,
+  actorId: string,
+  actor: { person: { name: string | null } | null; business: { name: string | null } | null }
+) => {
+  try {
+    const post = await prisma.forumPost.findUnique({
+      where: { id: postId },
+      select: {
+        text: true,
+        authorId: true,
+        followers: { select: { authId: true } },
+      },
+    });
+    if (!post) return;
+
+    const audience = new Set<string>([
+      post.authorId,
+      ...post.followers.map(f => f.authId),
+    ]);
+    audience.delete(actorId);
+    if (!audience.size) return;
+
+    const name = actor.person?.name || actor.business?.name || "Someone";
+    const snippet =
+      post.text.length > 40 ? `${post.text.slice(0, 40)}...` : post.text;
+
+    await Promise.all(
+      [...audience].map(userId =>
+        sendNotificationToUser(userId, name, `replied to "${snippet}"`, {
+          type: "forum_reply",
+          post_id: postId,
+        }).catch(() => null)
+      )
+    );
+  } catch (error) {
+    console.error("Failed to notify forum followers", error);
+  }
+};
+
 const createForumReply = async (
   postId: string,
   payload: TCreateForumReply,
@@ -274,6 +420,8 @@ const createForumReply = async (
       author: authorSelect,
     },
   });
+
+  void notifyFollowers(postId, authId, reply.author);
 
   return { ...reply, author: shapeAuthor(reply.author) };
 };
@@ -304,6 +452,67 @@ const toggleForumReaction = async (postId: string, authId: string) => {
   return { postId, hasReacted: !existing, reactionCount };
 };
 
+/// Voting again replaces your previous choice rather than adding a second, so
+/// a poll always reports one vote per person.
+const voteOnForumPoll = async (
+  postId: string,
+  optionId: string,
+  authId: string
+) => {
+  const post = await prisma.forumPost.findUnique({
+    where: { id: postId },
+    select: { groupId: true, poll: { select: { id: true } } },
+  });
+  if (!post) throw new ApiError(404, "Post not found.");
+  if (!post.poll) throw new ApiError(400, "This post has no poll.");
+
+  await assertMember(post.groupId, authId);
+
+  const option = await prisma.forumPollOption.findUnique({
+    where: { id: optionId },
+    select: { id: true, pollId: true },
+  });
+  if (!option || option.pollId !== post.poll.id) {
+    throw new ApiError(400, "That option is not on this poll.");
+  }
+
+  await prisma.forumPollVote.upsert({
+    where: { pollId_authId: { pollId: post.poll.id, authId } },
+    create: { pollId: post.poll.id, optionId, authId },
+    update: { optionId },
+  });
+
+  const poll = await prisma.forumPoll.findUnique({
+    where: { id: post.poll.id },
+    ...pollSelect,
+  });
+
+  return shapePoll(poll as RawPoll, optionId);
+};
+
+/// Following a post opts you into its reply notifications.
+const toggleForumFollow = async (postId: string, authId: string) => {
+  const post = await prisma.forumPost.findUnique({
+    where: { id: postId },
+    select: { groupId: true },
+  });
+  if (!post) throw new ApiError(404, "Post not found.");
+  await assertMember(post.groupId, authId);
+
+  const existing = await prisma.forumPostFollow.findUnique({
+    where: { postId_authId: { postId, authId } },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await prisma.forumPostFollow.delete({ where: { id: existing.id } });
+  } else {
+    await prisma.forumPostFollow.create({ data: { postId, authId } });
+  }
+
+  return { postId, isFollowing: !existing };
+};
+
 export const forumServices = {
   getGroupForumPosts,
   createForumPost,
@@ -311,4 +520,6 @@ export const forumServices = {
   getForumReplies,
   createForumReply,
   toggleForumReaction,
+  voteOnForumPoll,
+  toggleForumFollow,
 };

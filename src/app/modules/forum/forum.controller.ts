@@ -67,6 +67,28 @@ const toggleForumReaction = handleAsyncRequest(async (req: TRequest, res) => {
   sendResponse(res, { message: "Reaction updated!", data: result });
 });
 
+const voteOnForumPoll = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await forumServices.voteOnForumPoll(
+    req.params.id as string,
+    req.body.optionId as string,
+    req.user!.id
+  );
+  sendResponse(res, { message: "Vote recorded!", data: result });
+});
+
+const toggleForumFollow = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await forumServices.toggleForumFollow(
+    req.params.id as string,
+    req.user!.id
+  );
+  sendResponse(res, {
+    message: result.isFollowing
+      ? "You'll be notified about new replies."
+      : "You'll no longer be notified about this post.",
+    data: result,
+  });
+});
+
 export const forumController = {
   getGroupForumPosts,
   createForumPost,
@@ -74,4 +96,6 @@ export const forumController = {
   getForumReplies,
   createForumReply,
   toggleForumReaction,
+  voteOnForumPoll,
+  toggleForumFollow,
 };

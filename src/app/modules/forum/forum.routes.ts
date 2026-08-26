@@ -4,7 +4,11 @@ import authorize from "../../middlewares/authorize";
 import { upload } from "../../utils/awss3";
 import handleZodValidation from "../../middlewares/handleZodValidation";
 import { forumController } from "./forum.controller";
-import { createForumPostZod, createForumReplyZod } from "./forum.validation";
+import {
+  createForumPostZod,
+  createForumReplyZod,
+  forumPollVoteZod,
+} from "./forum.validation";
 
 const router = Router();
 
@@ -45,6 +49,19 @@ router.patch(
   "/:id/reaction",
   authorize(UserRole.PERSON, UserRole.BUSINESS),
   forumController.toggleForumReaction
+);
+
+router.post(
+  "/:id/poll/vote",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  handleZodValidation(forumPollVoteZod),
+  forumController.voteOnForumPoll
+);
+
+router.patch(
+  "/:id/follow",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  forumController.toggleForumFollow
 );
 
 export const forumRoutes = router;

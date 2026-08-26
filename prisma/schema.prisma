@@ -57,6 +57,9 @@ model Auth {
   forumReplies   ForumReply[]
   forumReactions ForumReaction[]
 
+  forumPollVotes ForumPollVote[]
+  forumFollows   ForumPostFollow[]
+
 }
 
 model Otp {
@@ -168,6 +171,8 @@ model ForumPost {
   updatedAt DateTime           @updatedAt
   replies   ForumReply[]
   reactions ForumReaction[]
+  poll      ForumPoll?
+  followers ForumPostFollow[]
 
   @@index([groupId, createdAt])
   @@map("forum_posts")
@@ -199,6 +204,60 @@ model ForumReaction {
 
   @@unique([postId, authId])
   @@map("forum_reactions")
+}
+
+// A poll rides on a forum post rather than replacing it: the post text is the
+// question, so a poll always has a caption like every other forum post.
+model ForumPoll {
+  id        String            @id @default(uuid())
+  postId    String            @unique
+  post      ForumPost         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime          @default(now())
+  options   ForumPollOption[]
+  votes     ForumPollVote[]
+
+  @@map("forum_polls")
+}
+
+model ForumPollOption {
+  id       String          @id @default(uuid())
+  pollId   String
+  poll     ForumPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  text     String
+  position Int
+  votes    ForumPollVote[]
+
+  @@index([pollId, position])
+  @@map("forum_poll_options")
+}
+
+model ForumPollVote {
+  id        String          @id @default(uuid())
+  pollId    String
+  poll      ForumPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId  String
+  option    ForumPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  authId    String
+  auth      Auth            @relation(fields: [authId], references: [id])
+  createdAt DateTime        @default(now())
+
+  // One vote per person per poll; changing your mind updates this row.
+  @@unique([pollId, authId])
+  @@map("forum_poll_votes")
+}
+
+// Following a post opts you into notifications for its new replies. The
+// author is notified whether or not they follow.
+model ForumPostFollow {
+  id        String    @id @default(uuid())
+  postId    String
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authId    String
+  auth      Auth      @relation(fields: [authId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@unique([postId, authId])
+  @@map("forum_post_follows")
 }
 
 model Comment {
