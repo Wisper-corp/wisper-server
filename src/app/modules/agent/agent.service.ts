@@ -215,11 +215,34 @@ const recentPostTexts = async (groupId: string) => {
   return posts.map(p => p.text.replace(/\s+/g, " ").slice(0, 160));
 };
 
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+/**
+ * Picks an agent that has not posted yet today.
+ *
+ * One post per active agent per day, chosen at random from whoever is still
+ * owed a turn. With five active agents that gives exactly five posts a day,
+ * each from a different member - which is what makes it read as a community
+ * rather than one account talking to itself.
+ */
 const pickPersona = async (groupId: string) => {
   const candidates = await prisma.agentPersona.findMany({
-    where: { groupId, isActive: true, isPaused: false },
-    orderBy: [{ lastPostedAt: "asc" }],
-    take: 5,
+    where: {
+      groupId,
+      isActive: true,
+      isPaused: false,
+      // Nobody speaks twice in a day.
+      activities: {
+        none: {
+          createdAt: { gte: startOfToday() },
+          kind: { in: ["POST", "REPLY"] },
+        },
+      },
+    },
     select: {
       id: true,
       headline: true,
@@ -229,10 +252,24 @@ const pickPersona = async (groupId: string) => {
     },
   });
   if (!candidates.length) return null;
-  // Whoever spoke least recently, with a little randomness so the rotation
-  // is not perfectly predictable.
-  return candidates[Math.floor(Math.random() * Math.min(3, candidates.length))];
+  return candidates[Math.floor(Math.random() * candidates.length)];
 };
+
+/** How many active agents still owe a post today. */
+export const agentsRemainingToday = async (groupId: string) =>
+  prisma.agentPersona.count({
+    where: {
+      groupId,
+      isActive: true,
+      isPaused: false,
+      activities: {
+        none: {
+          createdAt: { gte: startOfToday() },
+          kind: { in: ["POST", "REPLY"] },
+        },
+      },
+    },
+  });
 
 /** One agent writes a new discussion post. */
 const runStartDiscussion = async (groupId: string) => {
