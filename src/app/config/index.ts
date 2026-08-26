@@ -42,16 +42,38 @@ export default {
   //   AI_API_KEY    the provider's key
   //   AI_MODEL      model id; defaults per provider below
   //   AI_BASE_URL   only for openai-compatible hosts
-  ai: {
-    provider: (process.env.AI_PROVIDER || "deepseek").toLowerCase(),
-    apiKey: process.env.AI_API_KEY || "",
-    model:
-      process.env.AI_MODEL ||
-      (process.env.AI_PROVIDER === "anthropic"
-        ? "claude-opus-5"
-        : "deepseek-chat"),
-    baseUrl: process.env.AI_BASE_URL || "https://api.deepseek.com",
-  },
+  ai: (() => {
+    // Accept the provider's own conventional key name as well as AI_API_KEY,
+    // so an existing DEEPSEEK_API_KEY / ANTHROPIC_API_KEY just works and the
+    // provider is inferred from whichever one is present.
+    const explicit = (process.env.AI_PROVIDER || "").toLowerCase();
+    const provider =
+      explicit ||
+      (process.env.ANTHROPIC_API_KEY ? "anthropic" : "") ||
+      (process.env.DEEPSEEK_API_KEY ? "deepseek" : "") ||
+      (process.env.OPENAI_API_KEY ? "openai" : "") ||
+      "deepseek";
+
+    const keyForProvider: Record<string, string | undefined> = {
+      anthropic: process.env.ANTHROPIC_API_KEY,
+      deepseek: process.env.DEEPSEEK_API_KEY,
+      openai: process.env.OPENAI_API_KEY,
+    };
+
+    const defaults: Record<string, { model: string; baseUrl: string }> = {
+      anthropic: { model: "claude-opus-5", baseUrl: "" },
+      deepseek: { model: "deepseek-chat", baseUrl: "https://api.deepseek.com" },
+      openai: { model: "gpt-4o-mini", baseUrl: "https://api.openai.com/v1" },
+    };
+    const fallback = defaults[provider] ?? defaults.deepseek!;
+
+    return {
+      provider,
+      apiKey: process.env.AI_API_KEY || keyForProvider[provider] || "",
+      model: process.env.AI_MODEL || fallback.model,
+      baseUrl: process.env.AI_BASE_URL || fallback.baseUrl,
+    };
+  })(),
   agora: {
     appId: process.env.AGORA_APP_ID,
     appCertificate: process.env.AGORA_APP_CERTIFICATE,
