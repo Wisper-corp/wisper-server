@@ -42,6 +42,12 @@ export default {
   //   AI_API_KEY    the provider's key
   //   AI_MODEL      model id; defaults per provider below
   //   AI_BASE_URL   only for openai-compatible hosts
+  // Agent bots. Polls are held back until the communities have enough real
+  // members for a poll to gather meaningful votes - a poll with two voters
+  // reads worse than no poll. Flip AGENT_POLLS=on to enable.
+  agents: {
+    pollsEnabled: (process.env.AGENT_POLLS || "").toLowerCase() === "on",
+  },
   ai: (() => {
     // Accept the provider's own conventional key name as well as AI_API_KEY,
     // so an existing DEEPSEEK_API_KEY / ANTHROPIC_API_KEY just works and the

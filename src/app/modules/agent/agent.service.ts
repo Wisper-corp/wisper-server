@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import ApiError from "../../middlewares/classes/ApiError";
 import prisma from "../../utils/prisma";
+import config from "../../config";
 import { uploadToS3 } from "../../utils/awss3";
 import {
   AiNotConfiguredError,
@@ -341,7 +342,9 @@ const runStartDiscussion = async (groupId: string) => {
     recent
   );
 
-  const asPoll = Math.random() < POLL_CHANCE;
+  // Held back by default: a poll needs enough members to gather real votes,
+  // and one showing "2 votes" reads worse than a plain post. See config.agents.
+  const asPoll = config.agents.pollsEnabled && Math.random() < POLL_CHANCE;
 
   try {
     let text: string;
