@@ -45,6 +45,19 @@ export const sendNotification = async (
         body: payload.body,
       },
       data: dataPayload,
+      android: {
+        // High priority so a message arrives while the phone is idle rather
+        // than being batched until the next maintenance window.
+        priority: "high" as const,
+        notification: {
+          // Routes to the right channel in the app: each has its own name,
+          // sound and importance, so a caller does not sound like a like.
+          channelId:
+            typeof dataPayload?.channel === "string" && dataPayload.channel
+              ? dataPayload.channel
+              : "default_channel_id",
+        },
+      },
       apns: {
         headers: {
           "apns-push-type": "alert",
@@ -202,6 +215,49 @@ export const sendVoipPushToToken = async (
     }
   );
 };
+
+/**
+ * The kinds of notification the app knows how to draw.
+ *
+ * Each maps to its own Android channel so the phone can sound and group them
+ * differently - a missed call should not arrive looking like a forum reply.
+ */
+export type NotificationKind =
+  | "message"
+  | "forum"
+  | "activity"
+  | "call_missed";
+
+const CHANNEL_FOR: Record<NotificationKind, string> = {
+  message: "messages_channel",
+  forum: "forum_channel",
+  activity: "activity_channel",
+  call_missed: "calls_channel",
+};
+
+/**
+ * Sends a notification the app can render richly.
+ *
+ * [avatarUrl] is the picture shown beside the text - the sender's face for a
+ * message, the author's for a forum reply. The app downloads and draws it;
+ * the server only carries the URL.
+ */
+export const sendRichNotification = async (
+  receiverId: string,
+  params: {
+    kind: NotificationKind;
+    title: string;
+    body: string;
+    avatarUrl?: string | null;
+    data?: Record<string, any>;
+  }
+): Promise<any> =>
+  sendNotificationToUser(receiverId, params.title, params.body, {
+    ...(params.data ?? {}),
+    type: params.kind,
+    channel: CHANNEL_FOR[params.kind],
+    ...(params.avatarUrl ? { avatar_url: params.avatarUrl } : {}),
+  });
 
 export const sendNotificationToUser = async (
   receiverId: string,

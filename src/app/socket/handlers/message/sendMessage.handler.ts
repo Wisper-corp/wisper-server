@@ -1,7 +1,7 @@
 import { chatService } from "../../../modules/chat/chat.service";
 import { messageService } from "../../../modules/message/message.service";
 import prisma from "../../../utils/prisma";
-import { sendNotificationToUser } from "../../../utils/sendNotification";
+import { sendRichNotification } from "../../../utils/sendNotification";
 import { TMessagePayload } from "../../interface/message.interface";
 import { TAckFn, TSocket } from "../../interface/socket.interface";
 import ackHandler from "../../utils/ackHandler";
@@ -101,6 +101,11 @@ export const sendMessage = eventHandler<TMessagePayload>(
       messages[0]?.sender?.business?.name ||
       "New message";
 
+    const senderImage =
+      messages[0]?.sender?.person?.image ||
+      messages[0]?.sender?.business?.image ||
+      null;
+
     const getSnippet = (text?: string | null) => {
       if (!text) return "Sent a file.";
       const words = text.trim().split(/\s+/);
@@ -112,8 +117,14 @@ export const sendMessage = eventHandler<TMessagePayload>(
 
     await Promise.all(
       offlineIds.map(receiverId =>
-        sendNotificationToUser(receiverId, senderName, messageSnippet, {
-          chatId: data.chatId,
+        sendRichNotification(receiverId, {
+          kind: "message",
+          title: senderName,
+          body: messageSnippet,
+          // The sender's face, so a message looks like a message rather than
+          // a system alert.
+          avatarUrl: senderImage,
+          data: { chatId: data.chatId },
         })
       )
     );

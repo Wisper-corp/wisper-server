@@ -13,7 +13,7 @@ import {
   TCreateForumPost,
   TCreateForumReply,
 } from "./forum.validation";
-import { sendNotificationToUser } from "../../utils/sendNotification";
+import { sendRichNotification } from "../../utils/sendNotification";
 import {
   activeSuspension,
   screenContent,
@@ -386,7 +386,10 @@ const getForumReplies = async (postId: string, options: TPaginationOptions) => {
 const notifyFollowers = async (
   postId: string,
   actorId: string,
-  actor: { person: { name: string | null } | null; business: { name: string | null } | null }
+  actor: {
+    person: { name: string | null; image: string | null } | null;
+    business: { name: string | null; image: string | null } | null;
+  }
 ) => {
   try {
     const post = await prisma.forumPost.findUnique({
@@ -410,11 +413,17 @@ const notifyFollowers = async (
     const snippet =
       post.text.length > 40 ? `${post.text.slice(0, 40)}...` : post.text;
 
+    const avatar =
+      actor.person?.image || actor.business?.image || null;
+
     await Promise.all(
       [...audience].map(userId =>
-        sendNotificationToUser(userId, name, `replied to "${snippet}"`, {
-          type: "forum_reply",
-          post_id: postId,
+        sendRichNotification(userId, {
+          kind: "forum",
+          title: name,
+          body: `replied to "${snippet}"`,
+          avatarUrl: avatar,
+          data: { post_id: postId },
         }).catch(() => null)
       )
     );
