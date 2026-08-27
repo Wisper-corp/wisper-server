@@ -450,15 +450,17 @@ const getForumReplies = async (
   };
 };
 
-/// Tells the post author and anyone following it that a reply landed. Fired
-/// without awaiting: a notification failure must never fail the reply itself.
+/// Tells the post author, anyone following it, and — when this is a reply to a
+/// reply — the person being replied to, that a reply landed. Fired without
+/// awaiting: a notification failure must never fail the reply itself.
 const notifyFollowers = async (
   postId: string,
   actorId: string,
   actor: {
     person: { name: string | null; image: string | null } | null;
     business: { name: string | null; image: string | null } | null;
-  }
+  },
+  parentId?: string | null
 ) => {
   try {
     const post = await prisma.forumPost.findUnique({
@@ -471,12 +473,27 @@ const notifyFollowers = async (
     });
     if (!post) return;
 
+    // The person you replied to hears about it directly, and hears the more
+    // specific wording — they are not necessarily following the post at all.
+    let parentAuthorId: string | null = null;
+    if (parentId) {
+      const parent = await prisma.forumReply.findUnique({
+        where: { id: parentId },
+        select: { authorId: true },
+      });
+      if (parent && parent.authorId !== actorId) {
+        parentAuthorId = parent.authorId;
+      }
+    }
+
     const audience = new Set<string>([
       post.authorId,
       ...post.followers.map(f => f.authId),
     ]);
     audience.delete(actorId);
-    if (!audience.size) return;
+    // Only one notification per person, and the direct reply wins.
+    if (parentAuthorId) audience.delete(parentAuthorId);
+    if (!audience.size && !parentAuthorId) return;
 
     const name = actor.person?.name || actor.business?.name || "Someone";
     const snippet =
@@ -485,17 +502,19 @@ const notifyFollowers = async (
     const avatar =
       actor.person?.image || actor.business?.image || null;
 
-    await Promise.all(
-      [...audience].map(userId =>
-        sendRichNotification(userId, {
-          kind: "forum",
-          title: name,
-          body: `replied to "${snippet}"`,
-          avatarUrl: avatar,
-          data: { post_id: postId },
-        }).catch(() => null)
-      )
-    );
+    const notify = (userId: string, body: string) =>
+      sendRichNotification(userId, {
+        kind: "forum",
+        title: name,
+        body,
+        avatarUrl: avatar,
+        data: { post_id: postId, ...(parentId ? { reply_id: parentId } : {}) },
+      }).catch(() => null);
+
+    await Promise.all([
+      ...(parentAuthorId ? [notify(parentAuthorId, "replied to your comment")] : []),
+      ...[...audience].map(userId => notify(userId, `replied to "${snippet}"`)),
+    ]);
   } catch (error) {
     console.error("Failed to notify forum followers", error);
   }
@@ -549,7 +568,7 @@ const createForumReply = async (
     select: replySelect(authId),
   });
 
-  void notifyFollowers(postId, authId, reply.author);
+  void notifyFollowers(postId, authId, reply.author, payload.parentId ?? null);
 
   return shapeReply(reply as RawReply, authId);
 };
