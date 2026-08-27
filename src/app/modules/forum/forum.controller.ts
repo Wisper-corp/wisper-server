@@ -42,7 +42,8 @@ const getForumReplies = handleAsyncRequest(async (req: TRequest, res) => {
   const options = pick(req.query, ["page", "limit"]);
   const result = await forumServices.getForumReplies(
     req.params.id as string,
-    options
+    options,
+    req.user!.id
   );
   sendResponse(res, {
     message: "Replies retrieved successfully!",
@@ -89,6 +90,24 @@ const toggleForumFollow = handleAsyncRequest(async (req: TRequest, res) => {
   });
 });
 
+const toggleReplyReaction = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await forumServices.toggleReplyReaction(
+    req.params.id as string,
+    req.user!.id
+  );
+  sendResponse(res, { message: "Reaction updated!", data: result });
+});
+
+const getReplyThread = handleAsyncRequest(async (req: TRequest, res) => {
+  const options = pick(req.query, ["page", "limit"]);
+  const result = await forumServices.getReplyThread(
+    req.params.id as string,
+    req.user!.id,
+    options
+  );
+  sendResponse(res, { message: "Thread retrieved successfully!", data: result });
+});
+
 export const forumController = {
   getGroupForumPosts,
   createForumPost,
@@ -98,4 +117,6 @@ export const forumController = {
   toggleForumReaction,
   voteOnForumPoll,
   toggleForumFollow,
+  toggleReplyReaction,
+  getReplyThread,
 };

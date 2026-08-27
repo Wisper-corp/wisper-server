@@ -109,6 +109,44 @@ const assertNotSuspended = async (groupId: string, authId: string) => {
   return `You cannot post in this community until ${suspension.until.toUTCString()}. Reason: ${suspension.reason}`;
 };
 
+const replySelect = (authId: string) => ({
+  id: true,
+  text: true,
+  isEdited: true,
+  createdAt: true,
+  parentId: true,
+  author: authorSelect,
+  _count: { select: { reactions: true, children: true } },
+  // This viewer's own like, so the heart can render filled without a second
+  // request.
+  reactions: { where: { authId }, select: { id: true }, take: 1 },
+});
+
+type RawReply = {
+  id: string;
+  text: string;
+  isEdited: boolean;
+  createdAt: Date;
+  parentId: string | null;
+  author: Parameters<typeof shapeAuthor>[0];
+  _count: { reactions: number; children: number };
+  reactions: { id: string }[];
+};
+
+const shapeReply = (reply: RawReply, authId: string, children: unknown[] = []) => ({
+  id: reply.id,
+  text: reply.text,
+  isEdited: reply.isEdited,
+  createdAt: reply.createdAt,
+  parentId: reply.parentId,
+  author: shapeAuthor(reply.author),
+  reactionCount: reply._count.reactions,
+  hasReacted: reply.reactions.length > 0,
+  isMine: reply.author.id === authId,
+  replyCount: reply._count.children,
+  replies: children,
+});
+
 const assertMember = async (groupId: string, authId: string) => {
   const participant = await prisma.chatParticipant.findFirst({
     where: { authId, chat: { groupId } },
@@ -199,7 +237,14 @@ const getGroupForumPosts = async (
 };
 
 /// A forum post carries at most this many images.
-export const FORUM_MAX_IMAGES = 4;
+export /**
+ * Child replies sent inline with each top-level reply. Enough to show a
+ * conversation is happening; the rest arrive behind "Show more replies", so one
+ * busy thread cannot bury every other reply on the screen.
+ */
+const INLINE_CHILDREN = 2;
+
+const FORUM_MAX_IMAGES = 4;
 
 const createForumPost = async (
   payload: TCreateForumPost,
@@ -330,7 +375,11 @@ const deleteForumPost = async (postId: string, authId: string) => {
   return { id: postId };
 };
 
-const getForumReplies = async (postId: string, options: TPaginationOptions) => {
+const getForumReplies = async (
+  postId: string,
+  options: TPaginationOptions,
+  authId: string
+) => {
   const { page, take, skip } = calculatePagination(options);
 
   const post = await prisma.forumPost.findUnique({
@@ -346,21 +395,47 @@ const getForumReplies = async (postId: string, options: TPaginationOptions) => {
   });
   if (!post) throw new ApiError(404, "Post not found.");
 
-  const replies = await prisma.forumReply.findMany({
-    where: { postId },
-    select: {
-      id: true,
-      text: true,
-      isEdited: true,
-      createdAt: true,
-      author: authorSelect,
-    },
+  // Only top-level replies are paged; their children ride along, so a thread
+  // arrives whole rather than split across pages.
+  const topLevel = await prisma.forumReply.findMany({
+    where: { postId, parentId: null },
+    select: replySelect(authId),
     orderBy: { createdAt: "asc" },
     skip,
     take,
   });
 
+  // One query for every child of this page, rather than one query per reply.
+  const parentIds = topLevel.map(r => r.id);
+  const children = parentIds.length
+    ? await prisma.forumReply.findMany({
+        where: { parentId: { in: parentIds } },
+        select: replySelect(authId),
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+
+  const childrenByParent = new Map<string, RawReply[]>();
+  for (const child of children as RawReply[]) {
+    if (!child.parentId) continue;
+    const list = childrenByParent.get(child.parentId) ?? [];
+    list.push(child);
+    childrenByParent.set(child.parentId, list);
+  }
+
+  const replies = (topLevel as RawReply[]).map(reply =>
+    shapeReply(
+      reply,
+      authId,
+      (childrenByParent.get(reply.id) ?? [])
+        .slice(0, INLINE_CHILDREN)
+        .map(child => shapeReply(child, authId))
+    )
+  );
+
   return {
+    // total counts every reply in the thread, including nested ones, so the
+    // "12 Replies" label matches what a person would count.
     meta: { page, limit: take, total: post._count.replies },
     post: {
       id: post.id,
@@ -371,13 +446,7 @@ const getForumReplies = async (postId: string, options: TPaginationOptions) => {
       replyCount: post._count.replies,
       reactionCount: post._count.reactions,
     },
-    replies: replies.map(reply => ({
-      id: reply.id,
-      text: reply.text,
-      isEdited: reply.isEdited,
-      createdAt: reply.createdAt,
-      author: shapeAuthor(reply.author),
-    })),
+    replies,
   };
 };
 
@@ -458,20 +527,31 @@ const createForumReply = async (
     throw new ApiError(403, replyScreening.message ?? "This reply was removed.");
   }
 
+  // A reply to a reply must belong to the same post, or a thread could be
+  // grafted onto a different discussion entirely.
+  if (payload.parentId) {
+    const parent = await prisma.forumReply.findUnique({
+      where: { id: payload.parentId },
+      select: { postId: true },
+    });
+    if (!parent || parent.postId !== postId) {
+      throw new ApiError(400, "That reply is not on this post.");
+    }
+  }
+
   const reply = await prisma.forumReply.create({
-    data: { postId, authorId: authId, text: payload.text },
-    select: {
-      id: true,
-      text: true,
-      isEdited: true,
-      createdAt: true,
-      author: authorSelect,
+    data: {
+      postId,
+      authorId: authId,
+      text: payload.text,
+      parentId: payload.parentId ?? null,
     },
+    select: replySelect(authId),
   });
 
   void notifyFollowers(postId, authId, reply.author);
 
-  return { ...reply, author: shapeAuthor(reply.author) };
+  return shapeReply(reply as RawReply, authId);
 };
 
 // One endpoint for both directions: reacting twice removes it, which is what
@@ -561,6 +641,57 @@ const toggleForumFollow = async (postId: string, authId: string) => {
   return { postId, isFollowing: !existing };
 };
 
+/// Toggles a like on a reply. Same shape as post reactions: a row per person,
+/// so liking twice removes it rather than counting twice.
+const toggleReplyReaction = async (replyId: string, authId: string) => {
+  const reply = await prisma.forumReply.findUnique({
+    where: { id: replyId },
+    select: { post: { select: { groupId: true } } },
+  });
+  if (!reply) throw new ApiError(404, "Reply not found.");
+
+  await assertMember(reply.post.groupId, authId);
+
+  const existing = await prisma.forumReplyReaction.findUnique({
+    where: { replyId_authId: { replyId, authId } },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await prisma.forumReplyReaction.delete({ where: { id: existing.id } });
+  } else {
+    await prisma.forumReplyReaction.create({ data: { replyId, authId } });
+  }
+
+  const reactionCount = await prisma.forumReplyReaction.count({
+    where: { replyId },
+  });
+  return { replyId, hasReacted: !existing, reactionCount };
+};
+
+/// Everything under one reply, for "Show more replies".
+const getReplyThread = async (
+  replyId: string,
+  authId: string,
+  options: TPaginationOptions
+) => {
+  const { page, take, skip } = calculatePagination(options);
+
+  const children = await prisma.forumReply.findMany({
+    where: { parentId: replyId },
+    select: replySelect(authId),
+    orderBy: { createdAt: "asc" },
+    skip,
+    take,
+  });
+  const total = await prisma.forumReply.count({ where: { parentId: replyId } });
+
+  return {
+    meta: { page, limit: take, total },
+    replies: (children as RawReply[]).map(child => shapeReply(child, authId)),
+  };
+};
+
 export const forumServices = {
   getGroupForumPosts,
   createForumPost,
@@ -570,4 +701,6 @@ export const forumServices = {
   toggleForumReaction,
   voteOnForumPoll,
   toggleForumFollow,
+  toggleReplyReaction,
+  getReplyThread,
 };

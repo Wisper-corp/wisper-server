@@ -64,4 +64,17 @@ router.patch(
   forumController.toggleForumFollow
 );
 
+// A reply's own thread and its likes.
+router.get(
+  "/reply/:id/thread",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  forumController.getReplyThread
+);
+
+router.patch(
+  "/reply/:id/reaction",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  forumController.toggleReplyReaction
+);
+
 export const forumRoutes = router;

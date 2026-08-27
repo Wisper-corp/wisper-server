@@ -24,6 +24,8 @@ export const forumPollVoteZod = z.object({
 
 export const createForumReplyZod = z.object({
   text: z.string().trim().min(1, "Say something first.").max(5000),
+  // Replying to another reply rather than to the post itself.
+  parentId: z.string().uuid({ message: "Invalid reply id" }).optional(),
 });
 
 export type TCreateForumPost = z.infer<typeof createForumPostZod>;

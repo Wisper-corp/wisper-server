@@ -68,6 +68,8 @@ model Auth {
   moderationVerdicts ModerationVerdict[]
   suspensions        MemberSuspension[]
 
+  forumReplyReactions ForumReplyReaction[]
+
 }
 
 model Otp {
@@ -196,8 +198,32 @@ model ForumReply {
   isEdited  Boolean   @default(false)
   createdAt DateTime  @default(now())
 
+  // A reply to a reply. Null for a top-level reply to the post itself.
+  // Self-referential so a thread can go as deep as a conversation naturally
+  // does; the API flattens below the second level so the UI stays readable.
+  parentId  String?
+  parent    ForumReply?  @relation("ReplyThread", fields: [parentId], references: [id], onDelete: Cascade)
+  children  ForumReply[] @relation("ReplyThread")
+
+  reactions ForumReplyReaction[]
+
   @@index([postId, createdAt])
+  @@index([parentId, createdAt])
   @@map("forum_replies")
+}
+
+// One row per person per reply, matching how post reactions work, so "did I
+// like this" is answerable per viewer rather than only as a total.
+model ForumReplyReaction {
+  id        String     @id @default(uuid())
+  replyId   String
+  reply     ForumReply @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  authId    String
+  auth      Auth       @relation(fields: [authId], references: [id])
+  createdAt DateTime   @default(now())
+
+  @@unique([replyId, authId])
+  @@map("forum_reply_reactions")
 }
 
 // One row per person per post, so "did I react" is answerable per user
