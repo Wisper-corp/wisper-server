@@ -11,6 +11,7 @@ import { resumeRoutes } from "../modules/resume/resume.routes";
 import { businessRoutes } from "../modules/business/business.routes";
 import { jobRoutes } from "../modules/job/job.routes";
 import { forumRoutes } from "../modules/forum/forum.routes";
+import { savedRoutes } from "../modules/saved/saved.routes";
 import { agentRoutes } from "../modules/agent/agent.routes";
 import { moderationRoutes } from "../modules/moderation/moderation.routes";
 import { favoriteRoutes } from "../modules/favorite/favorite.routes";
@@ -48,6 +49,7 @@ const routes = [
   { path: "/businesses", route: businessRoutes },
   { path: "/jobs", route: jobRoutes },
   { path: "/forum", route: forumRoutes },
+  { path: "/saved", route: savedRoutes },
   { path: "/agents", route: agentRoutes },
   { path: "/moderation", route: moderationRoutes },
   { path: "/favorites", route: favoriteRoutes },

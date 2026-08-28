@@ -62,6 +62,7 @@ model Auth {
 
   forumPollVotes ForumPollVote[]
   forumFollows   ForumPostFollow[]
+  savedItems     SavedItem[]
 
   agentPersona   AgentPersona?
 
@@ -151,6 +152,7 @@ model Post {
   status        PostStatus    @default(ACTIVE)
   reactions     Reaction[]
   boosts        Boost[]
+  savedBy       SavedItem[]
 
   @@map("posts")
 }
@@ -183,6 +185,7 @@ model ForumPost {
   reactions ForumReaction[]
   poll      ForumPoll?
   followers ForumPostFollow[]
+  savedBy   SavedItem[]
 
   @@index([groupId, createdAt])
   @@map("forum_posts")
@@ -1034,4 +1037,25 @@ model Industry {
   @@index([name])
   @@index([sector])
   @@map("industries")
+}
+
+/// A service post or forum post someone kept for later.
+///
+/// Two nullable relations rather than a type/id pair so the saved list can be
+/// read back with a normal include; exactly one of them is set, which the
+/// service enforces and a database check constraint backs up.
+model SavedItem {
+  id          String     @id @default(uuid())
+  authId      String
+  auth        Auth       @relation(fields: [authId], references: [id])
+  postId      String?
+  post        Post?      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  forumPostId String?
+  forumPost   ForumPost? @relation(fields: [forumPostId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+
+  @@unique([authId, postId])
+  @@unique([authId, forumPostId])
+  @@index([authId, createdAt])
+  @@map("saved_items")
 }

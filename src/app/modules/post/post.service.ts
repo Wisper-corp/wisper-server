@@ -7,6 +7,7 @@ import {
   UserRole,
 } from "@prisma/client";
 import { TFile } from "../../interface/file.interface";
+import { savedServices } from "../saved/saved.service";
 import { deleteFromS3, uploadToS3 } from "../../utils/awss3";
 import {
   calculatePagination,
@@ -356,7 +357,12 @@ const getSingle = async (id: string) => {
   return result;
 };
 
-const getGroupPosts = async (groupId: string, options: TPaginationOptions, query?: Record<string, any>) => {
+const getGroupPosts = async (
+  groupId: string,
+  options: TPaginationOptions,
+  query?: Record<string, any>,
+  authId?: string
+) => {
   const andConditions: Prisma.PostWhereInput[] = [
     { groupId },
     { status: PostStatus.ACTIVE },
@@ -425,7 +431,18 @@ const getGroupPosts = async (groupId: string, options: TPaginationOptions, query
     total,
   };
 
-  return { meta, posts };
+  // One query for the whole page, so the bookmark on each card knows whether
+  // it is already filled without a request per row.
+  const saved = await savedServices.savedPostIds(
+    authId ?? "",
+    posts.map(post => post.id),
+    "service"
+  );
+
+  return {
+    meta,
+    posts: posts.map(post => ({ ...post, isSaved: saved.has(post.id) })),
+  };
 };
 
 const allPosts = async (

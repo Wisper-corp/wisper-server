@@ -14,6 +14,7 @@ import {
   TCreateForumReply,
 } from "./forum.validation";
 import { sendRichNotification } from "../../utils/sendNotification";
+import { savedServices } from "../saved/saved.service";
 import {
   activeSuspension,
   screenContent,
@@ -213,6 +214,13 @@ const getGroupForumPosts = async (
     for (const v of votes) myVotes.set(v.pollId, v.optionId);
   }
 
+  // One query for the whole page rather than one per post.
+  const saved = await savedServices.savedPostIds(
+    authId,
+    posts.map(p => p.id),
+    "forum"
+  );
+
   const shaped = posts.map(post => ({
     id: post.id,
     text: post.text,
@@ -226,6 +234,7 @@ const getGroupForumPosts = async (
     isFollowing: post.followers.length > 0,
     poll: shapePoll(post.poll as RawPoll, myVotes.get(post.poll?.id ?? "") ?? null),
     isMine: post.author.id === authId,
+    isSaved: saved.has(post.id),
     canDelete: post.author.id === authId || canModerate,
     replyAvatars: post.replies.map(reply => ({
       id: reply.author.id,
