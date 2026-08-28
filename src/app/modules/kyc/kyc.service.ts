@@ -111,15 +111,45 @@ const verifyEmail = async (authId: string, email: string, otp: string) => {
 // PHONE VERIFICATION (OTP sent via Sendchamp SMS)
 // ─────────────────────────────────────────────
 
+/// The same checks as [verifyOtpCode], against the phone table: still expiring
+/// after 10 minutes, still three attempts, still single-use.
+const verifyPhoneOtpCode = async (phone: string, code: string) => {
+  const record = await prisma.phoneOtp.findUnique({ where: { phone } });
+  if (!record || record.isVerified) {
+    throw new ApiError(400, "No active OTP found. Please request a new one.");
+  }
+  if (record.expires < new Date()) {
+    throw new ApiError(400, "OTP has expired. Please request a new one.");
+  }
+  if (record.attempts >= 3) {
+    throw new ApiError(400, "Too many attempts. Please request a new OTP.");
+  }
+
+  await prisma.phoneOtp.update({
+    where: { phone },
+    data: { attempts: { increment: 1 } },
+  });
+
+  const matched = await bcrypt.compare(code, record.otp);
+  if (!matched) throw new ApiError(400, "Invalid OTP. Please try again.");
+
+  await prisma.phoneOtp.update({
+    where: { phone },
+    data: { isVerified: true },
+  });
+};
+
 const sendSmsOtp = async (phone: string): Promise<void> => {
   const rawOtp = generateOTP();
   const hashed = await bcrypt.hash(rawOtp, 10);
   const expires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-  // Store OTP keyed by phone (re-use otps table, phone as "email" key)
-  await prisma.otp.upsert({
-    where: { email: phone },
-    create: { email: phone, otp: hashed, expires, attempts: 0, isVerified: false },
+  // Its own table: `otps.email` is a foreign key to auths.email, so a phone
+  // number could never be stored there — the upsert failed before an SMS was
+  // ever attempted.
+  await prisma.phoneOtp.upsert({
+    where: { phone },
+    create: { phone, otp: hashed, expires, attempts: 0, isVerified: false },
     update: { otp: hashed, expires, attempts: 0, isVerified: false },
   });
 
@@ -137,7 +167,7 @@ const sendPhoneOtp = async (authId: string, phone: string) => {
 };
 
 const verifyPhone = async (authId: string, phone: string, otp: string) => {
-  await verifyOtpCode(phone, otp);
+  await verifyPhoneOtpCode(phone, otp);
 
   await prisma.kycVerification.upsert({
     where: { authId },

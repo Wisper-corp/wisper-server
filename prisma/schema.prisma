@@ -1059,3 +1059,21 @@ model SavedItem {
   @@index([authId, createdAt])
   @@map("saved_items")
 }
+
+/// One-time codes sent to a phone.
+///
+/// Separate from [Otp] because that table's `email` column is a foreign key to
+/// auths.email — a phone number can never satisfy it, so phone verification
+/// could not store a code at all.
+model PhoneOtp {
+  id         String   @id @default(uuid())
+  phone      String   @unique
+  otp        String
+  expires    DateTime
+  attempts   Int      @default(0)
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("phone_otps")
+}
