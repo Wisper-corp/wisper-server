@@ -39,6 +39,9 @@ const shapeAuthor = (auth: {
   name: auth.person?.name || auth.business?.name || "User",
   image: auth.person?.image || auth.business?.image || null,
   title: auth.person?.title || auth.business?.industry || null,
+  // A person and a business have different profile screens, and the flattened
+  // author above loses the distinction the app needs to pick one.
+  isPerson: Boolean(auth.person),
 });
 
 // Admins and moderators police the forum; a plain member can only remove

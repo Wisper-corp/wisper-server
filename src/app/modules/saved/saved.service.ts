@@ -27,6 +27,7 @@ const shapeAuthor = (author: {
   name: author.person?.name || author.business?.name || "Someone",
   image: author.person?.image || author.business?.image || null,
   title: author.person?.title || author.business?.industry || null,
+  isPerson: Boolean(author.person),
 });
 
 /// Saving is one endpoint in both directions: tapping a filled bookmark means
