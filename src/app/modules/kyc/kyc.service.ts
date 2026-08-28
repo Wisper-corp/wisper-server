@@ -5,6 +5,7 @@ import generateOTP from "../../utils/generateOTP";
 import prisma from "../../utils/prisma";
 import { sendEmail } from "../../utils/sendEmail";
 import { sendNotificationToUser } from "../../utils/sendNotification";
+import { sendSms } from "../../utils/sendSms";
 import path from "path";
 
 const OTP_EXPIRY_MINUTES = 10;
@@ -107,7 +108,7 @@ const verifyEmail = async (authId: string, email: string, otp: string) => {
 };
 
 // ─────────────────────────────────────────────
-// PHONE VERIFICATION (OTP sent via Termii SMS)
+// PHONE VERIFICATION (OTP sent via Sendchamp SMS)
 // ─────────────────────────────────────────────
 
 const sendSmsOtp = async (phone: string): Promise<void> => {
@@ -122,35 +123,11 @@ const sendSmsOtp = async (phone: string): Promise<void> => {
     update: { otp: hashed, expires, attempts: 0, isVerified: false },
   });
 
-  const termiiApiKey = process.env.TERMII_API_KEY || "";
-  const termiiSenderId = process.env.TERMII_SENDER_ID || "N-Alert";
-  const termiiBaseUrl = (process.env.TERMII_BASE_URL || "https://v4.api.termii.com") + "/api/sms/send";
-
-  if (!termiiApiKey) {
-    console.warn(`[Termii] TERMII_API_KEY not set. OTP for ${phone}: ${rawOtp}`);
-    return;
-  }
-
-  const body = {
-    to: phone,
-    from: termiiSenderId,
-    sms: `Your Wisper phone verification code is: ${rawOtp}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code.`,
-    type: "plain",
-    api_key: termiiApiKey,
-    channel: "generic",
-  };
-
-  const res = await fetch(termiiBaseUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error(`[Termii] SMS failed for ${phone}:`, err);
-    throw new ApiError(500, "Failed to send SMS. Please try again.");
-  }
+  await sendSms(
+    phone,
+    `Your Wisper phone verification code is: ${rawOtp}. ` +
+      `Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code.`
+  );
 };
 
 const sendPhoneOtp = async (authId: string, phone: string) => {
