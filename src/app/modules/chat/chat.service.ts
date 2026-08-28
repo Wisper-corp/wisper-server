@@ -89,6 +89,18 @@ const getMyChats = async (
     },
   });
 
+  // A one-to-one chat row is created the moment someone opens the
+  // conversation, before a word is sent, so visiting a profile used to leave
+  // an empty thread sitting in the inbox forever. Hide those until they carry
+  // a message. Communities and classes are exempt: a group you joined belongs
+  // in the list whether or not anyone has spoken in it yet.
+  andConditions.push({
+    OR: [
+      { type: { not: ChatType.INDIVIDUAL } },
+      { messages: { some: {} } },
+    ],
+  });
+
   if (searchTerm) {
     andConditions.push({
       OR: [
