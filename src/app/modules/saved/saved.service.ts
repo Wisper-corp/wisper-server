@@ -10,18 +10,23 @@ export type TSavedKind = "service" | "forum";
 const authorSelect = {
   id: true,
   person: { select: { name: true, image: true, title: true } },
-  business: { select: { name: true, image: true, title: true } },
+  // Business has no `title`; the closest thing it carries is `industry`.
+  business: { select: { name: true, image: true, industry: true } },
 };
 
 const shapeAuthor = (author: {
   id: string;
   person: { name: string | null; image: string | null; title: string | null } | null;
-  business: { name: string | null; image: string | null; title: string | null } | null;
+  business: {
+    name: string | null;
+    image: string | null;
+    industry: string | null;
+  } | null;
 }) => ({
   id: author.id,
   name: author.person?.name || author.business?.name || "Someone",
   image: author.person?.image || author.business?.image || null,
-  title: author.person?.title || author.business?.title || null,
+  title: author.person?.title || author.business?.industry || null,
 });
 
 /// Saving is one endpoint in both directions: tapping a filled bookmark means
