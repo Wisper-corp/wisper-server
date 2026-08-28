@@ -38,25 +38,24 @@ export const sendNotification = async (
 
     const dataPayload = normalizeDataPayload(extraData);
 
+    // Android gets a DATA-ONLY message on purpose. A `notification` block is
+    // drawn by the system tray, which cannot carry a large icon -- so the
+    // sender's face never appears, and the app's own handler posts a second,
+    // duplicate notification beside it. Data-only leaves rendering entirely to
+    // RichNotification, which draws the avatar as the large icon with the
+    // Wisper mark badged underneath it. Title and body therefore travel inside
+    // `data` for Android; iOS still needs a real alert, so APNs carries one.
     const response = await admin.messaging().sendEachForMulticast({
       tokens: fcmToken,
-      notification: {
+      data: {
+        ...(dataPayload ?? {}),
         title: payload.title,
         body: payload.body,
       },
-      data: dataPayload,
       android: {
         // High priority so a message arrives while the phone is idle rather
         // than being batched until the next maintenance window.
         priority: "high" as const,
-        notification: {
-          // Routes to the right channel in the app: each has its own name,
-          // sound and importance, so a caller does not sound like a like.
-          channelId:
-            typeof dataPayload?.channel === "string" && dataPayload.channel
-              ? dataPayload.channel
-              : "default_channel_id",
-        },
       },
       apns: {
         headers: {
@@ -64,6 +63,10 @@ export const sendNotification = async (
         },
         payload: {
           aps: {
+            alert: {
+              title: payload.title,
+              body: payload.body,
+            },
             badge: 1,
             sound: "default",
           },
