@@ -140,6 +140,73 @@ const getAllGroups = async (
   return { meta, groups };
 };
 
+/// Counts what the caller has done inside each of the given groups, and when
+/// they last did it.
+///
+/// Three separate reads rather than one clever query: messages hang off the
+/// group's chat, forum posts off the group, and forum replies off a post, so
+/// there is no single join that covers all three without a union.
+const ENGAGEMENT_WINDOW_DAYS = 30;
+
+const measureEngagement = async (authId: string, groupIds: string[]) => {
+  const tally = new Map<string, { count: number; lastAt: Date }>();
+  if (!groupIds.length) return tally;
+
+  const since = new Date(
+    Date.now() - ENGAGEMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  const record = (groupId: string | null | undefined, at: Date) => {
+    if (!groupId) return;
+    const existing = tally.get(groupId);
+    if (!existing) {
+      tally.set(groupId, { count: 1, lastAt: at });
+      return;
+    }
+    existing.count += 1;
+    if (at > existing.lastAt) existing.lastAt = at;
+  };
+
+  try {
+    const [messages, posts, replies] = await Promise.all([
+      prisma.message.findMany({
+        where: {
+          senderId: authId,
+          createdAt: { gte: since },
+          chat: { groupId: { in: groupIds } },
+        },
+        select: { createdAt: true, chat: { select: { groupId: true } } },
+      }),
+      prisma.forumPost.findMany({
+        where: {
+          authorId: authId,
+          createdAt: { gte: since },
+          groupId: { in: groupIds },
+        },
+        select: { createdAt: true, groupId: true },
+      }),
+      prisma.forumReply.findMany({
+        where: {
+          authorId: authId,
+          createdAt: { gte: since },
+          post: { groupId: { in: groupIds } },
+        },
+        select: { createdAt: true, post: { select: { groupId: true } } },
+      }),
+    ]);
+
+    for (const m of messages) record(m.chat?.groupId, m.createdAt);
+    for (const p of posts) record(p.groupId, p.createdAt);
+    for (const r of replies) record(r.post?.groupId, r.createdAt);
+  } catch (error) {
+    // Ordering is a nicety; the list itself is not. An unranked Home beats a
+    // Home that fails to load.
+    console.error("Failed to measure community engagement", error);
+  }
+
+  return tally;
+};
+
 const getPublicGroups = async (
   options: TPaginationOptions,
   query: Record<string, any>,
@@ -259,6 +326,13 @@ const getPublicGroups = async (
     where: whereConditions,
   });
 
+  // How engaged the caller is with each community they belong to, so Home can
+  // lead with the one they actually use. Engagement means the things a person
+  // does in a community: messages in its chat, forum posts, forum replies.
+  // Counted over a rolling window so a community that was busy months ago does
+  // not hold the top spot forever.
+  const engagement = await measureEngagement(authId, [...joinedGroupIds]);
+
   const refinedGroups = groups.map(group => ({
     id: group.id,
     name: group.name,
@@ -279,6 +353,9 @@ const getPublicGroups = async (
         participant.auth.business?.image ||
         null,
     })),
+    // Zero for a group the caller has not joined - they cannot have engaged.
+    myActivityCount: engagement.get(group.id)?.count ?? 0,
+    myLastActivityAt: engagement.get(group.id)?.lastAt ?? null,
   }));
 
   const meta = {
