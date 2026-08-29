@@ -450,6 +450,9 @@ model Job {
   experienceLevel  JobExperienceLevel
   compensationType JobCompensationType
   salary           Float
+  /// Added to the database by raw SQL before it reached this file, so the
+  /// generated client did not know it existed and the service had to strip it.
+  currency         String?             @default("USD")
   locationType     JobLocationType
   isScraped        Boolean         @default(false)
   companyLogo      String?

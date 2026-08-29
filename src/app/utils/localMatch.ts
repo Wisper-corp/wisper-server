@@ -52,3 +52,45 @@ export const homeLocationOf = async (authId: string) => {
 /// True when the request asked for local results. Query params are strings, so
 /// "false" must not read as truthy.
 export const wantsLocal = (raw: unknown) => raw === true || raw === "true";
+
+/// "Local" on the Jobs tab means Nigeria, not "wherever the caller happens to
+/// be". Half the accounts have no address at all, so matching on a profile
+/// address left the filter empty for them; the audience is Nigerian, so the
+/// question they are actually asking is "is this job here, or paid in naira".
+export const NIGERIAN_CITIES = [
+  "Lagos",
+  "Abuja",
+  "Port Harcourt",
+  "Ibadan",
+  "Kano",
+  "Benin City",
+  "Kaduna",
+  "Enugu",
+  "Onitsha",
+  "Aba",
+  "Jos",
+  "Ilorin",
+  "Owerri",
+  "Uyo",
+  "Calabar",
+  "Warri",
+  "Abeokuta",
+  "Akure",
+  "Maiduguri",
+  "Zaria",
+  "Asaba",
+  "Awka",
+  "Ikeja",
+  "Lekki",
+  "Victoria Island",
+  "Yaba",
+  "Ikorodu",
+  "Ogun",
+  "Oyo",
+  "Rivers",
+  "Delta",
+  "Anambra",
+];
+
+/// The currency a naira salary is stored under.
+export const NAIRA = "NGN";

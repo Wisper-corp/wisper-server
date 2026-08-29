@@ -1,7 +1,7 @@
 import { Job, Prisma } from "@prisma/client";
 import {
-  homeLocationOf,
-  locationTokens,
+  NAIRA,
+  NIGERIAN_CITIES,
   wantsLocal,
 } from "../../utils/localMatch";
 import prisma from "../../utils/prisma";
@@ -48,8 +48,10 @@ const createJob = async (userId: string, payload: Job) => {
   // Default industry if not provided
   if (!payload.industry) payload.industry = "General";
 
-  // Strip fields not yet in Prisma client (added via raw SQL migration)
-  const { currency, applicationEmail, ...cleanPayload } = payload as any;
+  // applicationEmail is still absent from the generated client. `currency` no
+  // longer is -- and stripping it meant every job the app posted was saved
+  // with the column default of USD, even though the app sends NGN.
+  const { applicationEmail, ...cleanPayload } = payload as any;
 
   // Ensure group membership
   if (cleanPayload.groupId) {
@@ -102,29 +104,28 @@ const createJob = async (userId: string, payload: Job) => {
   return result;
 };
 
-/// Jobs whose stated location overlaps the caller's own.
+/// Jobs in Nigeria, or paid in naira.
 ///
-/// An impossible condition when we do not know where they are, rather than
-/// quietly ignoring the filter and showing them everything: a "Local jobs"
-/// list that is secretly every job is worse than an empty one.
-const localJobCondition = async (
-  authId?: string
-): Promise<Prisma.JobWhereInput> => {
-  const home = authId ? await homeLocationOf(authId) : null;
-  const tokens = locationTokens(home);
-  if (!tokens.length) return { id: { in: [] } };
-
-  return {
-    OR: tokens.map(token => ({
-      location: { contains: token, mode: "insensitive" as const },
-    })),
-  };
-};
+/// Not "near the caller": half the accounts carry no address, which left the
+/// filter empty for them, and the audience here is Nigerian -- the question
+/// being asked is "is this job here, or paid in naira".
+///
+/// Cities are matched exactly or as the first part of "City, ..." rather than
+/// by substring: "Aba" appears inside plenty of words that are not a city.
+const localJobCondition = (): Prisma.JobWhereInput => ({
+  OR: [
+    { currency: NAIRA },
+    { location: { contains: "Nigeria", mode: "insensitive" as const } },
+    ...NIGERIAN_CITIES.flatMap(city => [
+      { location: { equals: city, mode: "insensitive" as const } },
+      { location: { startsWith: `${city},`, mode: "insensitive" as const } },
+    ]),
+  ],
+});
 
 const getAllJobs = async (
   options: TPaginationOptions,
-  query: Record<string, any>,
-  authId?: string
+  query: Record<string, any>
 ) => {
   const { searchTerm, maxSalary, minSalary, postedAfter } = query;
   const andConditions: Prisma.JobWhereInput[] = [];
@@ -165,7 +166,7 @@ const getAllJobs = async (
   }
 
   if (wantsLocal(query.local)) {
-    andConditions.push(await localJobCondition(authId));
+    andConditions.push(localJobCondition());
   }
 
   const whereConditions: Prisma.JobWhereInput =
@@ -296,8 +297,7 @@ const presentableScrapedJob: Prisma.JobWhereInput = {
 const getGroupJobs = async (
   groupId: string,
   options: TPaginationOptions,
-  query: Record<string, any> = {},
-  authId?: string
+  query: Record<string, any> = {}
 ) => {
   // One designated community also surfaces the shared scraped-job pool, which
   // is otherwise unreachable (scraped jobs carry no groupId). Every other
@@ -328,7 +328,7 @@ const getGroupJobs = async (
   }
 
   if (wantsLocal(query.local)) {
-    andConditions.push(await localJobCondition(authId));
+    andConditions.push(localJobCondition());
   }
 
   const whereConditions: Prisma.JobWhereInput = { AND: andConditions };
