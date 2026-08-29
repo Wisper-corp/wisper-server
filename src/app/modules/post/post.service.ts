@@ -7,6 +7,11 @@ import {
   UserRole,
 } from "@prisma/client";
 import { TFile } from "../../interface/file.interface";
+import {
+  homeLocationOf,
+  locationTokens,
+  wantsLocal,
+} from "../../utils/localMatch";
 import { savedServices } from "../saved/saved.service";
 import { deleteFromS3, uploadToS3 } from "../../utils/awss3";
 import {
@@ -357,6 +362,28 @@ const getSingle = async (id: string) => {
   return result;
 };
 
+/// Posts whose author is in the same place as the caller.
+///
+/// An impossible condition when we do not know where the caller is, rather
+/// than quietly showing them everything: a "Local services" list that is
+/// secretly every service is worse than an empty one.
+const localAuthorCondition = async (
+  authId?: string
+): Promise<Prisma.PostWhereInput> => {
+  const home = authId ? await homeLocationOf(authId) : null;
+  const tokens = locationTokens(home);
+  if (!tokens.length) return { id: { in: [] } };
+
+  return {
+    author: {
+      OR: tokens.flatMap(token => [
+        { person: { address: { contains: token, mode: "insensitive" as const } } },
+        { business: { address: { contains: token, mode: "insensitive" as const } } },
+      ]),
+    },
+  };
+};
+
 const getGroupPosts = async (
   groupId: string,
   options: TPaginationOptions,
@@ -372,6 +399,12 @@ const getGroupPosts = async (
     andConditions.push({
       caption: { contains: query.searchTerm as string, mode: "insensitive" },
     });
+  }
+
+  // A service post carries no place of its own, so "local" means the person
+  // offering it is near you — matched on their profile address.
+  if (wantsLocal(query?.local)) {
+    andConditions.push(await localAuthorCondition(authId));
   }
 
   const whereConditions: Prisma.PostWhereInput = { AND: andConditions };

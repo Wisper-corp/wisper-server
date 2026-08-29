@@ -1,4 +1,9 @@
 import { Job, Prisma } from "@prisma/client";
+import {
+  homeLocationOf,
+  locationTokens,
+  wantsLocal,
+} from "../../utils/localMatch";
 import prisma from "../../utils/prisma";
 import {
   calculatePagination,
@@ -97,9 +102,29 @@ const createJob = async (userId: string, payload: Job) => {
   return result;
 };
 
+/// Jobs whose stated location overlaps the caller's own.
+///
+/// An impossible condition when we do not know where they are, rather than
+/// quietly ignoring the filter and showing them everything: a "Local jobs"
+/// list that is secretly every job is worse than an empty one.
+const localJobCondition = async (
+  authId?: string
+): Promise<Prisma.JobWhereInput> => {
+  const home = authId ? await homeLocationOf(authId) : null;
+  const tokens = locationTokens(home);
+  if (!tokens.length) return { id: { in: [] } };
+
+  return {
+    OR: tokens.map(token => ({
+      location: { contains: token, mode: "insensitive" as const },
+    })),
+  };
+};
+
 const getAllJobs = async (
   options: TPaginationOptions,
-  query: Record<string, any>
+  query: Record<string, any>,
+  authId?: string
 ) => {
   const { searchTerm, maxSalary, minSalary, postedAfter } = query;
   const andConditions: Prisma.JobWhereInput[] = [];
@@ -137,6 +162,10 @@ const getAllJobs = async (
         gte: postedAfter,
       },
     });
+  }
+
+  if (wantsLocal(query.local)) {
+    andConditions.push(await localJobCondition(authId));
   }
 
   const whereConditions: Prisma.JobWhereInput =
@@ -264,7 +293,12 @@ const presentableScrapedJob: Prisma.JobWhereInput = {
   },
 };
 
-const getGroupJobs = async (groupId: string, options: TPaginationOptions) => {
+const getGroupJobs = async (
+  groupId: string,
+  options: TPaginationOptions,
+  query: Record<string, any> = {},
+  authId?: string
+) => {
   // One designated community also surfaces the shared scraped-job pool, which
   // is otherwise unreachable (scraped jobs carry no groupId). Every other
   // community keeps showing only what its own members posted.
@@ -272,9 +306,32 @@ const getGroupJobs = async (groupId: string, options: TPaginationOptions) => {
     Boolean(config.scrapedJobsGroupId) &&
     groupId === config.scrapedJobsGroupId;
 
-  const whereConditions: Prisma.JobWhereInput = showsScrapedPool
+  const scope: Prisma.JobWhereInput = showsScrapedPool
     ? { OR: [{ groupId }, presentableScrapedJob] }
     : { groupId };
+
+  // Everything below used to be dropped on the floor: this endpoint took no
+  // query at all, so searching inside a community's Jobs tab and filtering it
+  // by location both did nothing.
+  const andConditions: Prisma.JobWhereInput[] = [scope];
+
+  if (query.searchTerm) {
+    andConditions.push({
+      OR: jobSearchableFields.map(field => ({
+        [field]: { contains: query.searchTerm, mode: "insensitive" },
+      })),
+    });
+  }
+
+  if (query.locationType) {
+    andConditions.push({ locationType: query.locationType });
+  }
+
+  if (wantsLocal(query.local)) {
+    andConditions.push(await localJobCondition(authId));
+  }
+
+  const whereConditions: Prisma.JobWhereInput = { AND: andConditions };
 
   const { page, take, skip, sortBy, orderBy } = calculatePagination(options);
   const jobs = await prisma.job.findMany({

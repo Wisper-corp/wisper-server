@@ -15,7 +15,7 @@ const createJob = handleAsyncRequest(async (req: TRequest, res) => {
 
 const getAllJobs = handleAsyncRequest(async (req: TRequest, res) => {
   const options = pick(req.query, ["page", "limit", "sortBy", "orderBy"]);
-  const result = await jobServices.getAllJobs(options, req.query);
+  const result = await jobServices.getAllJobs(options, req.query, req.user?.id);
   sendResponse(res, {
     message: "Jobs retrieved successfully!",
     data: result,
@@ -26,7 +26,9 @@ const getGroupJobs = handleAsyncRequest(async (req: TRequest, res) => {
   const options = pick(req.query, ["page", "limit", "sortBy", "orderBy"]);
   const result = await jobServices.getGroupJobs(
     req.params.groupId as string,
-    options
+    options,
+    req.query,
+    req.user?.id
   );
   sendResponse(res, {
     message: "Group jobs retrieved successfully!",
