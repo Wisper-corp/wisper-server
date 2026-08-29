@@ -296,18 +296,41 @@ const industries: { sector: string; name: string }[] = [
 
 async function main() {
   console.log(`Seeding ${industries.length} industries...`);
-  
-  let inserted = 0;
+
+  // Matched case-insensitively. `name` is unique but case-sensitive, so
+  // upserting on the exact string quietly added "FinTech" beside the
+  // "Fintech" already in production, and both then showed in search.
+  const existing = await prisma.industry.findMany({
+    select: { id: true, name: true },
+  });
+  const byLowerName = new Map(
+    existing.map(row => [row.name.toLowerCase(), row])
+  );
+
+  let added = 0;
+  let updated = 0;
   for (const industry of industries) {
-    await prisma.industry.upsert({
-      where: { name: industry.name },
-      update: { sector: industry.sector },
-      create: { name: industry.name, sector: industry.sector },
+    const match = byLowerName.get(industry.name.toLowerCase());
+    if (match) {
+      // Keep the name production already uses; only correct the sector.
+      await prisma.industry.update({
+        where: { id: match.id },
+        data: { sector: industry.sector },
+      });
+      updated++;
+      continue;
+    }
+    const created = await prisma.industry.create({
+      data: { name: industry.name, sector: industry.sector },
     });
-    inserted++;
+    byLowerName.set(created.name.toLowerCase(), created);
+    added++;
   }
-  
-  console.log(`✅ Successfully seeded ${inserted} industries across sectors.`);
+
+  const total = await prisma.industry.count();
+  console.log(
+    `✅ ${added} added, ${updated} already present. ${total} industries in total.`
+  );
 }
 
 main()
