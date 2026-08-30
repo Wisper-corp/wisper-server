@@ -14,8 +14,17 @@ export const s3Client = new S3Client({
   },
 });
 
+/// The largest file the API will take, in bytes.
+///
+/// Files are held in memory while they are forwarded to S3 and the box has
+/// under 2 GB of it, so this is a real ceiling rather than a formality. Set
+/// below nginx's own limit so an oversized upload is refused here, with a
+/// sentence someone can read, rather than by nginx with an HTML error page.
+export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
 export const upload = multer({
   storage: memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
 });
 
 //upload a single file

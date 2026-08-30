@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { MAX_UPLOAD_BYTES } from "../utils/awss3";
 import config from "../config";
 import ApiError from "./classes/ApiError";
 import { Prisma } from "@prisma/client";
@@ -107,7 +108,12 @@ const globalErrorHandler = (
     message = err?.message;
   } else if (err.name === "MulterError") {
     status = 400;
-    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      // Said in bytes by multer, which means nothing to the person who picked
+      // the file.
+      const mb = Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024));
+      message = `That file is too large. The limit is ${mb} MB.`;
+    } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
       message = err?.message;
       err = [
         {
