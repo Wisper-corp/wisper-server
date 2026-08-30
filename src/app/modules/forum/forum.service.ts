@@ -30,11 +30,21 @@ const authorSelect = {
   },
 };
 
-const shapeAuthor = (auth: {
+type RawAuthor = {
   id: string;
-  person: { name: string | null; image: string | null; title: string | null } | null;
-  business: { name: string | null; image: string | null; industry: string | null } | null;
-}) => ({
+  person: {
+    name: string | null;
+    image: string | null;
+    title: string | null;
+  } | null;
+  business: {
+    name: string | null;
+    image: string | null;
+    industry: string | null;
+  } | null;
+};
+
+const shapeAuthor = (auth: RawAuthor) => ({
   id: auth.id,
   name: auth.person?.name || auth.business?.name || "User",
   image: auth.person?.image || auth.business?.image || null,
@@ -151,6 +161,35 @@ const shapeReply = (reply: RawReply, authId: string, children: unknown[] = []) =
   replies: children,
 });
 
+/// How many faces the reply stack shows, and how many replies are read to
+/// find them.
+///
+/// The stack showed whoever wrote the last three replies, so one person
+/// answering twice appeared twice in it. Scanning further back finds three
+/// different people instead.
+const REPLY_AVATARS = 3;
+const REPLY_AVATAR_SCAN = 12;
+
+const distinctReplyAvatars = (
+  replies: { author: RawAuthor }[]
+): { id: string; image: string | null }[] => {
+  const seen = new Set<string>();
+  const avatars: { id: string; image: string | null }[] = [];
+
+  for (const reply of replies) {
+    if (seen.has(reply.author.id)) continue;
+    seen.add(reply.author.id);
+    avatars.push({
+      id: reply.author.id,
+      image:
+        reply.author.person?.image || reply.author.business?.image || null,
+    });
+    if (avatars.length === REPLY_AVATARS) break;
+  }
+
+  return avatars;
+};
+
 const assertMember = async (groupId: string, authId: string) => {
   const participant = await prisma.chatParticipant.findFirst({
     where: { authId, chat: { groupId } },
@@ -186,9 +225,11 @@ const getGroupForumPosts = async (
       poll: pollSelect,
       // This viewer's vote and follow state, fetched with the row.
       followers: { where: { authId }, select: { id: true }, take: 1 },
-      // Avatars for the "12 replies" stack.
+      // Avatars for the "12 replies" stack. More than the stack shows,
+      // because the same person often writes several of the latest replies
+      // and only distinct faces are worth a slot.
       replies: {
-        take: 3,
+        take: REPLY_AVATAR_SCAN,
         orderBy: { createdAt: "desc" },
         select: { author: authorSelect },
       },
@@ -239,10 +280,7 @@ const getGroupForumPosts = async (
     isMine: post.author.id === authId,
     isSaved: saved.has(post.id),
     canDelete: post.author.id === authId || canModerate,
-    replyAvatars: post.replies.map(reply => ({
-      id: reply.author.id,
-      image: reply.author.person?.image || reply.author.business?.image || null,
-    })),
+    replyAvatars: distinctReplyAvatars(post.replies),
   }));
 
   return { meta: { page, limit: take, total }, posts: shaped };
