@@ -118,8 +118,9 @@ const getSavedItems = async (
   authId: string,
   query: { type?: string; searchTerm?: string }
 ) => {
-  const wantsService = query.type !== "forum";
-  const wantsForum = query.type !== "service";
+  const wantsService = query.type === undefined || query.type === "service";
+  const wantsForum = query.type === undefined || query.type === "forum";
+  const wantsReply = query.type === undefined || query.type === "reply";
   const term = (query.searchTerm ?? "").trim();
 
   const rows = await prisma.savedItem.findMany({
@@ -128,6 +129,7 @@ const getSavedItems = async (
       OR: [
         ...(wantsService ? [{ postId: { not: null } }] : []),
         ...(wantsForum ? [{ forumPostId: { not: null } }] : []),
+        ...(wantsReply ? [{ forumReplyId: { not: null } }] : []),
       ],
     },
     orderBy: { createdAt: "desc" },
@@ -158,6 +160,17 @@ const getSavedItems = async (
           group: { select: { name: true } },
         },
       },
+      forumReply: {
+        select: {
+          id: true,
+          text: true,
+          createdAt: true,
+          author: { select: authorSelect },
+          post: {
+            select: { groupId: true, group: { select: { name: true } } },
+          },
+        },
+      },
     },
   });
 
@@ -178,6 +191,23 @@ const getSavedItems = async (
           groupName: null as string | null,
           createdAt: row.post.createdAt,
           author: shapeAuthor(row.post.author),
+        };
+      }
+      if (row.forumReply) {
+        return {
+          savedId: row.id,
+          savedAt: row.createdAt,
+          kind: "reply" as const,
+          id: row.forumReply.id,
+          text: row.forumReply.text,
+          images: [] as string[],
+          price: null,
+          currency: null,
+          deliveryTime: null,
+          groupId: row.forumReply.post.groupId,
+          groupName: row.forumReply.post.group?.name ?? null,
+          createdAt: row.forumReply.createdAt,
+          author: shapeAuthor(row.forumReply.author),
         };
       }
       if (row.forumPost) {
