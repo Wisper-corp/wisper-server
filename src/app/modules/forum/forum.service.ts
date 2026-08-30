@@ -248,7 +248,12 @@ const getGroupForumPosts = async (
   return { meta: { page, limit: take, total }, posts: shaped };
 };
 
-/// A forum post carries at most this many images.
+/// A forum post carries at most this many attachments.
+///
+/// They arrive on the `images` field and are stored in the `images` column,
+/// which now holds videos and documents too -- both are just S3 URLs, and the
+/// app reads the kind from the extension. Renaming the column would break
+/// every post already written.
 export /**
  * Child replies sent inline with each top-level reply. Enough to show a
  * conversation is happening; the rest arrive behind "Show more replies", so one
@@ -281,7 +286,7 @@ const createForumPost = async (
   if (files && files.length > FORUM_MAX_IMAGES) {
     throw new ApiError(
       400,
-      `You can attach up to ${FORUM_MAX_IMAGES} images.`
+      `You can attach up to ${FORUM_MAX_IMAGES} files.`
     );
   }
 
