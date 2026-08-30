@@ -6,8 +6,8 @@ import { sendResponse } from "../../utils/sendResponse";
 import { savedServices, TSavedKind } from "./saved.service";
 
 const readKind = (raw: string | undefined): TSavedKind => {
-  if (raw === "service" || raw === "forum") return raw;
-  throw new ApiError(400, "Save either a service post or a forum post.");
+  if (raw === "service" || raw === "forum" || raw === "reply") return raw;
+  throw new ApiError(400, "Save a service post, a forum post or a reply.");
 };
 
 const toggleSaved = handleAsyncRequest(async (req: TRequest, res: Response) => {

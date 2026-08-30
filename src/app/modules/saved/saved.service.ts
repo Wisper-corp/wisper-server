@@ -5,7 +5,7 @@ import prisma from "../../utils/prisma";
 /// What a saved thing looks like once it is flattened for the client. Service
 /// posts and forum posts are different shapes, so the list says which it is
 /// rather than pretending they are one type.
-export type TSavedKind = "service" | "forum";
+export type TSavedKind = "service" | "forum" | "reply";
 
 const authorSelect = {
   id: true,
@@ -37,24 +37,29 @@ const toggleSaved = async (
   kind: TSavedKind,
   itemId: string
 ) => {
-  if (kind === "service") {
-    const post = await prisma.post.findUnique({
-      where: { id: itemId },
-      select: { id: true },
-    });
-    if (!post) throw new ApiError(404, "Post not found.");
-  } else {
-    const post = await prisma.forumPost.findUnique({
-      where: { id: itemId },
-      select: { id: true },
-    });
-    if (!post) throw new ApiError(404, "Post not found.");
-  }
+  const exists =
+    kind === "service"
+      ? await prisma.post.findUnique({
+          where: { id: itemId },
+          select: { id: true },
+        })
+      : kind === "forum"
+        ? await prisma.forumPost.findUnique({
+            where: { id: itemId },
+            select: { id: true },
+          })
+        : await prisma.forumReply.findUnique({
+            where: { id: itemId },
+            select: { id: true },
+          });
+  if (!exists) throw new ApiError(404, "Post not found.");
 
   const where: Prisma.SavedItemWhereInput =
     kind === "service"
       ? { authId, postId: itemId }
-      : { authId, forumPostId: itemId };
+      : kind === "forum"
+        ? { authId, forumPostId: itemId }
+        : { authId, forumReplyId: itemId };
 
   const existing = await prisma.savedItem.findFirst({
     where,
@@ -70,7 +75,9 @@ const toggleSaved = async (
     data:
       kind === "service"
         ? { authId, postId: itemId }
-        : { authId, forumPostId: itemId },
+        : kind === "forum"
+          ? { authId, forumPostId: itemId }
+          : { authId, forumReplyId: itemId },
   });
   return { kind, itemId, isSaved: true };
 };
@@ -87,12 +94,20 @@ const savedPostIds = async (
     where:
       kind === "service"
         ? { authId, postId: { in: postIds } }
-        : { authId, forumPostId: { in: postIds } },
-    select: { postId: true, forumPostId: true },
+        : kind === "forum"
+          ? { authId, forumPostId: { in: postIds } }
+          : { authId, forumReplyId: { in: postIds } },
+    select: { postId: true, forumPostId: true, forumReplyId: true },
   });
   return new Set(
     rows
-      .map(r => (kind === "service" ? r.postId : r.forumPostId))
+      .map(r =>
+        kind === "service"
+          ? r.postId
+          : kind === "forum"
+            ? r.forumPostId
+            : r.forumReplyId
+      )
       .filter((id): id is string => Boolean(id))
   );
 };

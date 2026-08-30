@@ -38,6 +38,17 @@ const deleteForumPost = handleAsyncRequest(async (req: TRequest, res) => {
   sendResponse(res, { message: "Post deleted!", data: result });
 });
 
+const deleteForumReply = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await forumServices.deleteForumReply(
+    req.params.id as string,
+    req.user!.id
+  );
+  sendResponse(res, {
+    message: "Reply deleted.",
+    data: result,
+  });
+});
+
 const getForumReplies = handleAsyncRequest(async (req: TRequest, res) => {
   const options = pick(req.query, ["page", "limit"]);
   const result = await forumServices.getForumReplies(
@@ -112,6 +123,7 @@ export const forumController = {
   getGroupForumPosts,
   createForumPost,
   deleteForumPost,
+  deleteForumReply,
   getForumReplies,
   createForumReply,
   toggleForumReaction,

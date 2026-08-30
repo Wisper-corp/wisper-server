@@ -147,7 +147,12 @@ type RawReply = {
   reactions: { id: string }[];
 };
 
-const shapeReply = (reply: RawReply, authId: string, children: unknown[] = []) => ({
+const shapeReply = (
+  reply: RawReply,
+  authId: string,
+  children: unknown[] = [],
+  extras: { canDelete?: boolean; isSaved?: boolean } = {}
+) => ({
   id: reply.id,
   text: reply.text,
   isEdited: reply.isEdited,
@@ -157,6 +162,9 @@ const shapeReply = (reply: RawReply, authId: string, children: unknown[] = []) =
   reactionCount: reply._count.reactions,
   hasReacted: reply.reactions.length > 0,
   isMine: reply.author.id === authId,
+  // The author can always remove their own; a moderator can remove anyone's.
+  canDelete: extras.canDelete ?? reply.author.id === authId,
+  isSaved: extras.isSaved ?? false,
   replyCount: reply._count.children,
   replies: children,
 });
@@ -430,6 +438,29 @@ const deleteForumPost = async (postId: string, authId: string) => {
   return { id: postId };
 };
 
+/// Removing a reply takes its own replies with it -- the database cascades on
+/// parentId, so a thread never outlives the comment it hangs from.
+const deleteForumReply = async (replyId: string, authId: string) => {
+  const reply = await prisma.forumReply.findUnique({
+    where: { id: replyId },
+    select: { authorId: true, post: { select: { groupId: true } } },
+  });
+  if (!reply) throw new ApiError(404, "Reply not found.");
+
+  if (reply.authorId !== authId) {
+    const role = await moderatorRoleIn(reply.post.groupId, authId);
+    if (!role) {
+      throw new ApiError(
+        403,
+        "Only the author, an admin or a moderator can delete this reply."
+      );
+    }
+  }
+
+  await prisma.forumReply.delete({ where: { id: replyId } });
+  return { id: replyId };
+};
+
 const getForumReplies = async (
   postId: string,
   options: TPaginationOptions,
@@ -444,6 +475,8 @@ const getForumReplies = async (
       text: true,
       images: true,
       createdAt: true,
+      // Needed to work out who may delete a reply in this thread.
+      groupId: true,
       author: authorSelect,
       _count: { select: { replies: true, reactions: true } },
     },
@@ -478,13 +511,33 @@ const getForumReplies = async (
     childrenByParent.set(child.parentId, list);
   }
 
+  // One query for everything on the page, nested replies included, rather
+  // than one per row. A moderator can remove anyone's reply, so who may
+  // delete is decided once for the whole thread.
+  const canModerateHere = Boolean(await moderatorRoleIn(post.groupId, authId));
+  const shownIds = [
+    ...topLevel.map(r => r.id),
+    ...(children as RawReply[]).map(r => r.id),
+  ];
+  const savedReplies = await savedServices.savedPostIds(
+    authId,
+    shownIds,
+    "reply"
+  );
+
+  const extrasFor = (reply: RawReply) => ({
+    canDelete: canModerateHere || reply.author.id === authId,
+    isSaved: savedReplies.has(reply.id),
+  });
+
   const replies = (topLevel as RawReply[]).map(reply =>
     shapeReply(
       reply,
       authId,
       (childrenByParent.get(reply.id) ?? [])
         .slice(0, INLINE_CHILDREN)
-        .map(child => shapeReply(child, authId))
+        .map(child => shapeReply(child, authId, [], extrasFor(child))),
+      extrasFor(reply)
     )
   );
 
@@ -770,6 +823,7 @@ export const forumServices = {
   getGroupForumPosts,
   createForumPost,
   deleteForumPost,
+  deleteForumReply,
   getForumReplies,
   createForumReply,
   toggleForumReaction,

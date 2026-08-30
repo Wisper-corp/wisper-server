@@ -192,6 +192,7 @@ model ForumPost {
 }
 
 model ForumReply {
+  savedBy   SavedItem[]
   id        String    @id @default(uuid())
   postId    String
   post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -1055,10 +1056,13 @@ model SavedItem {
   post        Post?      @relation(fields: [postId], references: [id], onDelete: Cascade)
   forumPostId String?
   forumPost   ForumPost? @relation(fields: [forumPostId], references: [id], onDelete: Cascade)
+  forumReplyId String?
+  forumReply   ForumReply? @relation(fields: [forumReplyId], references: [id], onDelete: Cascade)
   createdAt   DateTime   @default(now())
 
   @@unique([authId, postId])
   @@unique([authId, forumPostId])
+  @@unique([authId, forumReplyId])
   @@index([authId, createdAt])
   @@map("saved_items")
 }

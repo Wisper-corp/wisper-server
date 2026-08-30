@@ -71,6 +71,12 @@ router.get(
   forumController.getReplyThread
 );
 
+router.delete(
+  "/reply/:id",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  forumController.deleteForumReply
+);
+
 router.patch(
   "/reply/:id/reaction",
   authorize(UserRole.PERSON, UserRole.BUSINESS),
