@@ -608,7 +608,14 @@ model Message {
   forumPostId String?
   forumPost   ForumPost? @relation(fields: [forumPostId], references: [id], onDelete: SetNull)
 
+  // Quoting another message in the same conversation. SetNull, so deleting the
+  // quoted message leaves the reply standing rather than taking it with it.
+  replyToId String?
+  replyTo   Message?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReply")
+
   @@index([forumPostId])
+  @@index([replyToId])
   @@map("messages")
 }
 

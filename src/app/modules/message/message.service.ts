@@ -5,6 +5,8 @@ import { TSendMessage } from "./message.validation";
 import {
   forumPostPreviewSelect,
   shapeForumPostPreview,
+  quotedMessageSelect,
+  shapeQuotedMessage,
 } from "../../utils/forumPostPreview";
 import {
   calculatePagination,
@@ -77,6 +79,18 @@ const sendMessage = async (authId: string, payload: TSendMessage) => {
     }
   }
 
+  // Quoting is only meaningful inside one conversation, and letting an id
+  // from another chat through would leak that message's text into this one.
+  if (payload.replyToId) {
+    const quoted = await prisma.message.findUnique({
+      where: { id: payload.replyToId },
+      select: { chatId: true },
+    });
+    if (!quoted || quoted.chatId !== payload.chatId) {
+      throw new ApiError(400, "You can only reply to a message in this chat.");
+    }
+  }
+
   const messagePayload = {
     ...payload,
     senderId: authId,
@@ -141,6 +155,8 @@ const getMessagesByChat = async (
       // Null on an ordinary message; set when this is a private reply to a
       // forum post.
       forumPost: { select: forumPostPreviewSelect },
+      // The message this one is a reply to, if any.
+      replyTo: { select: quotedMessageSelect },
       messagesSeen: {
         select: {
           participant: {
@@ -191,6 +207,7 @@ const getMessagesByChat = async (
       isRead,
       offerData,
       forumPost: shapeForumPostPreview(msg.forumPost),
+      replyTo: shapeQuotedMessage(msg.replyTo),
     };
   }));
 

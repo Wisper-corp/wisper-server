@@ -14,8 +14,12 @@ const deleteMessage = eventHandler<TDeleteMessage>(
       },
     });
 
+    // The return matters: ackHandler only sends the acknowledgement, it does
+    // not stop the handler. Without it every check below ran anyway and
+    // anyone could delete anyone's message.
     if (message.senderId !== authId) {
       ackHandler(ack, { success: false, message: "Unauthorized to delete!" });
+      return;
     }
 
     await prisma.message.delete({
@@ -24,46 +28,13 @@ const deleteMessage = eventHandler<TDeleteMessage>(
       },
     });
 
-    const newMessages = await prisma.message.findMany({
-      where: {
-        chatId: message.chatId,
-      },
-      select: {
-        id: true,
-        chatId: true,
-        sender: {
-          select: {
-            id: true,
-            person: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
-            business: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
-          },
-        },
-        text: true,
-        file: true,
-        fileType: true,
-        isEdited: true,
-        createdAt: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-      take: 1,
-    });
-
-    socket.to(message.chatId).emit("newMessage", newMessages[0]);
-    socket.emit("newMessage", newMessages[0]);
+    // Say what was removed. This used to send the chat's OLDEST message back
+    // as "newMessage", which re-inserted the first message of the
+    // conversation instead of taking the deleted one away.
+    const removed = { messageId: message.id, chatId: message.chatId };
+    socket.to(message.chatId).emit("messageDeleted", removed);
+    socket.emit("messageDeleted", removed);
+    ackHandler(ack, { success: true, message: "Message deleted" });
   }
 );
 

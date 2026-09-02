@@ -15,6 +15,11 @@ export const sendMessageZod = z
       .string()
       .uuid({ message: "forumPostId must be a valid UUID" })
       .optional(),
+    // Set when this message quotes another one in the same chat.
+    replyToId: z
+      .string()
+      .uuid({ message: "replyToId must be a valid UUID" })
+      .optional(),
   })
   .refine(
     data => {

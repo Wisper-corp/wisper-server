@@ -59,3 +59,51 @@ export const shapeForumPostPreview = (post: RawPreview | null | undefined) => {
     },
   };
 };
+
+/**
+ * What a reply shows about the message it quotes.
+ *
+ * A line of text, or the kind of file it was, plus who sent it — enough for
+ * the bar above a reply. Trimmed for the same reason the post preview is.
+ */
+export const quotedMessageSelect = {
+  id: true,
+  text: true,
+  file: true,
+  fileType: true,
+  sender: {
+    select: {
+      id: true,
+      person: { select: { name: true } },
+      business: { select: { name: true } },
+    },
+  },
+} as const;
+
+const QUOTE_CHARS = 160;
+
+type RawQuote = {
+  id: string;
+  text: string | null;
+  file: string | null;
+  fileType: string | null;
+  sender?: {
+    id?: string | null;
+    person?: { name: string | null } | null;
+    business?: { name: string | null } | null;
+  } | null;
+};
+
+export const shapeQuotedMessage = (msg: RawQuote | null | undefined) => {
+  if (!msg) return null;
+  const profile = msg.sender?.person ?? msg.sender?.business ?? null;
+  const text = msg.text ?? "";
+  return {
+    id: msg.id,
+    text: text.length > QUOTE_CHARS ? `${text.slice(0, QUOTE_CHARS)}…` : text,
+    fileType: msg.fileType,
+    file: msg.file,
+    senderId: msg.sender?.id ?? null,
+    senderName: profile?.name ?? null,
+  };
+};

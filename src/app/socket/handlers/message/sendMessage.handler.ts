@@ -10,6 +10,8 @@ import onlineUsers from "../../utils/onlineUsers";
 import {
   forumPostPreviewSelect,
   shapeForumPostPreview,
+  quotedMessageSelect,
+  shapeQuotedMessage,
 } from "../../../utils/forumPostPreview";
 
 export const sendMessage = eventHandler<TMessagePayload>(
@@ -62,6 +64,7 @@ export const sendMessage = eventHandler<TMessagePayload>(
         // what actually delivers a chat message, so leaving it out here would
         // show the card only after a reload.
         forumPost: { select: forumPostPreviewSelect },
+        replyTo: { select: quotedMessageSelect },
       },
       orderBy: {
         createdAt: "desc",
@@ -73,6 +76,7 @@ export const sendMessage = eventHandler<TMessagePayload>(
       ? {
           ...messages[0],
           forumPost: shapeForumPostPreview(messages[0].forumPost),
+          replyTo: shapeQuotedMessage(messages[0].replyTo),
         }
       : messages[0];
 
