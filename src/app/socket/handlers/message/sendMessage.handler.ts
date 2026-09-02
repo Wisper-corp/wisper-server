@@ -7,6 +7,10 @@ import { TAckFn, TSocket } from "../../interface/socket.interface";
 import ackHandler from "../../utils/ackHandler";
 import eventHandler from "../../utils/eventHandler";
 import onlineUsers from "../../utils/onlineUsers";
+import {
+  forumPostPreviewSelect,
+  shapeForumPostPreview,
+} from "../../../utils/forumPostPreview";
 
 export const sendMessage = eventHandler<TMessagePayload>(
   async (socket: TSocket, data, ack: TAckFn) => {
@@ -54,6 +58,10 @@ export const sendMessage = eventHandler<TMessagePayload>(
         fileType: true,
         isEdited: true,
         createdAt: true,
+        // A private reply carries the forum post it is about. The socket is
+        // what actually delivers a chat message, so leaving it out here would
+        // show the card only after a reload.
+        forumPost: { select: forumPostPreviewSelect },
       },
       orderBy: {
         createdAt: "desc",
@@ -61,8 +69,15 @@ export const sendMessage = eventHandler<TMessagePayload>(
       take: 1,
     });
 
-    socket.to(data.chatId).emit("newMessage", messages[0]);
-    socket.emit("newMessage", messages[0]);
+    const delivered = messages[0]
+      ? {
+          ...messages[0],
+          forumPost: shapeForumPostPreview(messages[0].forumPost),
+        }
+      : messages[0];
+
+    socket.to(data.chatId).emit("newMessage", delivered);
+    socket.emit("newMessage", delivered);
 
     const participants = await prisma.chatParticipant.findMany({
       where: {

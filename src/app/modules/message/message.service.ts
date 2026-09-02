@@ -3,6 +3,10 @@ import ApiError from "../../middlewares/classes/ApiError";
 import prisma from "../../utils/prisma";
 import { TSendMessage } from "./message.validation";
 import {
+  forumPostPreviewSelect,
+  shapeForumPostPreview,
+} from "../../utils/forumPostPreview";
+import {
   calculatePagination,
   TPaginationOptions,
 } from "../../utils/paginationCalculation";
@@ -49,6 +53,28 @@ const sendMessage = async (authId: string, payload: TSendMessage) => {
       400,
       `Can't send message! ${chat.type === ChatType.INDIVIDUAL ? `${partnerName} has blocked you!` : "You are blocked in this chat."}`
     );
+  }
+
+  // A private reply carries the post it is about. The id arrives from the
+  // client, so it is checked here rather than trusted: the post must exist,
+  // and the sender must be in the community it belongs to. Without the second
+  // check, anyone could quote a post out of a community they cannot see and
+  // hand its contents to someone else.
+  if (payload.forumPostId) {
+    const post = await prisma.forumPost.findUnique({
+      where: { id: payload.forumPostId },
+      select: { groupId: true },
+    });
+    if (!post) {
+      throw new ApiError(404, "That forum post no longer exists.");
+    }
+    const membership = await prisma.chatParticipant.findFirst({
+      where: { authId, chat: { groupId: post.groupId } },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new ApiError(403, "You are not in that post's community.");
+    }
   }
 
   const messagePayload = {
@@ -112,6 +138,9 @@ const getMessagesByChat = async (
       fileType: true,
       isEdited: true,
       createdAt: true,
+      // Null on an ordinary message; set when this is a private reply to a
+      // forum post.
+      forumPost: { select: forumPostPreviewSelect },
       messagesSeen: {
         select: {
           participant: {
@@ -161,6 +190,7 @@ const getMessagesByChat = async (
       messagesSeen: undefined,
       isRead,
       offerData,
+      forumPost: shapeForumPostPreview(msg.forumPost),
     };
   }));
 

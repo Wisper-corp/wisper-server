@@ -54,23 +54,22 @@ model Auth {
   receivedOffers          Offer[]                  @relation("OfferReceiver")
   kycVerification         KycVerification?
   kycBadge                KycVerificationBadge?
-
-  @@map("auths")
-  forumPosts     ForumPost[]
-  forumReplies   ForumReply[]
-  forumReactions ForumReaction[]
+  forumPosts              ForumPost[]
+  forumReplies            ForumReply[]
+  forumReactions          ForumReaction[]
 
   forumPollVotes ForumPollVote[]
   forumFollows   ForumPostFollow[]
   savedItems     SavedItem[]
 
-  agentPersona   AgentPersona?
+  agentPersona AgentPersona?
 
   moderationVerdicts ModerationVerdict[]
   suspensions        MemberSuspension[]
 
   forumReplyReactions ForumReplyReaction[]
 
+  @@map("auths")
 }
 
 model Otp {
@@ -144,7 +143,7 @@ model Post {
   commentAccess CommentAccess
   price         Float?
   deliveryTime  String?
-  currency      String?   @default("NGN")
+  currency      String?       @default("NGN")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   comment       Comment[]
@@ -171,21 +170,22 @@ model Reaction {
 // (price, deliveryTime, currency, boosts) and Comment has no parent, so it
 // cannot carry replies.
 model ForumPost {
-  id        String             @id @default(uuid())
+  id        String            @id @default(uuid())
   authorId  String
-  author    Auth               @relation(fields: [authorId], references: [id])
+  author    Auth              @relation(fields: [authorId], references: [id])
   groupId   String
-  group     Group              @relation(fields: [groupId], references: [id])
+  group     Group             @relation(fields: [groupId], references: [id])
   text      String
   images    String[]
-  isEdited  Boolean            @default(false)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  isEdited  Boolean           @default(false)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
   replies   ForumReply[]
   reactions ForumReaction[]
   poll      ForumPoll?
   followers ForumPostFollow[]
   savedBy   SavedItem[]
+  messages  Message[]
 
   @@index([groupId, createdAt])
   @@map("forum_posts")
@@ -193,21 +193,21 @@ model ForumPost {
 
 model ForumReply {
   savedBy   SavedItem[]
-  id        String    @id @default(uuid())
+  id        String      @id @default(uuid())
   postId    String
-  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post      ForumPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
   authorId  String
-  author    Auth      @relation(fields: [authorId], references: [id])
+  author    Auth        @relation(fields: [authorId], references: [id])
   text      String
-  isEdited  Boolean   @default(false)
-  createdAt DateTime  @default(now())
+  isEdited  Boolean     @default(false)
+  createdAt DateTime    @default(now())
 
   // A reply to a reply. Null for a top-level reply to the post itself.
   // Self-referential so a thread can go as deep as a conversation naturally
   // does; the API flattens below the second level so the UI stays readable.
-  parentId  String?
-  parent    ForumReply?  @relation("ReplyThread", fields: [parentId], references: [id], onDelete: Cascade)
-  children  ForumReply[] @relation("ReplyThread")
+  parentId String?
+  parent   ForumReply?  @relation("ReplyThread", fields: [parentId], references: [id], onDelete: Cascade)
+  children ForumReply[] @relation("ReplyThread")
 
   reactions ForumReplyReaction[]
 
@@ -302,11 +302,11 @@ model ForumPostFollow {
 // every post, so the same agent sounds like the same person over time - the
 // single biggest thing that makes seeded activity read as real.
 model AgentPersona {
-  id        String   @id @default(uuid())
-  authId    String   @unique
-  auth      Auth     @relation(fields: [authId], references: [id], onDelete: Cascade)
-  groupId   String
-  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  authId  String @unique
+  auth    Auth   @relation(fields: [authId], references: [id], onDelete: Cascade)
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   // What this person does and how they write. Fed into every prompt.
   headline  String
@@ -314,14 +314,14 @@ model AgentPersona {
   voice     String
 
   // Only active agents post; the rest exist to make the member count real.
-  isActive  Boolean  @default(false)
+  isActive    Boolean @default(false)
   // The community's bot moderator. At most one per community.
   isModerator Boolean @default(false)
   // Paused by an admin - keeps the account and its history, stops the posting.
-  isPaused  Boolean  @default(false)
+  isPaused    Boolean @default(false)
 
   lastPostedAt DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   activities AgentActivity[]
 
@@ -398,16 +398,16 @@ model ModerationVerdict {
 // A temporary posting ban. Expiry is a timestamp rather than a flag, so a
 // suspension lifts itself and nothing has to run to clear it.
 model MemberSuspension {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   authId    String
-  auth      Auth     @relation(fields: [authId], references: [id])
+  auth      Auth      @relation(fields: [authId], references: [id])
   groupId   String
   until     DateTime
   reason    String
   // The moderator account, bot or human.
   issuedBy  String?
   liftedAt  DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([authId, groupId, until])
   @@map("member_suspensions")
@@ -455,7 +455,7 @@ model Job {
   /// generated client did not know it existed and the service had to strip it.
   currency         String?             @default("USD")
   locationType     JobLocationType
-  isScraped        Boolean         @default(false)
+  isScraped        Boolean             @default(false)
   companyLogo      String?
   companyName      String?
   location         String?
@@ -498,16 +498,21 @@ model Class {
 }
 
 model Group {
-  id              String   @id @default(uuid())
+  id              String         @id @default(uuid())
   name            String
   description     String?
-  isPrivate       Boolean  @default(true)
+  // The live table has had this column for a long time; the schema did not,
+  // so the generated client dropped it and group.controller.ts stopped
+  // compiling. Declared here so the two agree -- and so a future migrate does
+  // not read it as a column to drop.
+  tags            String[]
+  isPrivate       Boolean        @default(true)
   // Hand-picked for Explore. A featured community is suggested regardless of
   // size; everything else still has to clear the member floor.
-  isFeatured      Boolean  @default(false)
-  allowInvitation Boolean  @default(false)
+  isFeatured      Boolean        @default(false)
+  allowInvitation Boolean        @default(false)
   image           String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime       @default(now())
   chat            Chat?
   posts           Post[]
   jobs            Job[]
@@ -597,6 +602,13 @@ model Message {
   createdAt    DateTime      @default(now())
   messagesSeen MessageSeen[]
 
+  // A private reply carries the forum post it is about, so the recipient can
+  // see what it refers to. Null on an ordinary message. SetNull rather than
+  // Cascade: deleting a post must not delete the conversations about it.
+  forumPostId String?
+  forumPost   ForumPost? @relation(fields: [forumPostId], references: [id], onDelete: SetNull)
+
+  @@index([forumPostId])
   @@map("messages")
 }
 
@@ -771,19 +783,19 @@ model Payment {
 }
 
 model Offer {
-  id          String      @id @default(uuid())
-  senderId    String
-  sender      Auth        @relation(name: "OfferSender", fields: [senderId], references: [id])
-  receiverId  String
-  receiver    Auth        @relation(name: "OfferReceiver", fields: [receiverId], references: [id])
-  chatId      String
-  amount      Float
-  description String
-  duration    String
-  status      OfferStatus @default(PENDING)
-  escrowAmount Float?      // amount held in admin escrow wallet
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id           String      @id @default(uuid())
+  senderId     String
+  sender       Auth        @relation(name: "OfferSender", fields: [senderId], references: [id])
+  receiverId   String
+  receiver     Auth        @relation(name: "OfferReceiver", fields: [receiverId], references: [id])
+  chatId       String
+  amount       Float
+  description  String
+  duration     String
+  status       OfferStatus @default(PENDING)
+  escrowAmount Float? // amount held in admin escrow wallet
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@map("offers")
 }
@@ -965,26 +977,26 @@ model KycVerification {
   auth   Auth   @relation(fields: [authId], references: [id])
 
   // Email verification
-  emailStatus    KycFieldStatus @default(UNVERIFIED)
-  verifiedEmail  String?        // the email that was verified
+  emailStatus   KycFieldStatus @default(UNVERIFIED)
+  verifiedEmail String? // the email that was verified
 
   // Phone verification
-  phoneStatus    KycFieldStatus @default(UNVERIFIED)
-  verifiedPhone  String?        // the phone that was verified
+  phoneStatus   KycFieldStatus @default(UNVERIFIED)
+  verifiedPhone String? // the phone that was verified
 
   // NIN verification (via QoreID)
-  ninStatus      KycFieldStatus @default(UNVERIFIED)
-  ninAttempts    Int            @default(0)  // max 3
-  ninNumber      String?
-  ninFirstName   String?
-  ninLastName    String?
-  ninDob         String?        // date of birth from QoreID, stored as string
+  ninStatus    KycFieldStatus @default(UNVERIFIED)
+  ninAttempts  Int            @default(0) // max 3
+  ninNumber    String?
+  ninFirstName String?
+  ninLastName  String?
+  ninDob       String? // date of birth from QoreID, stored as string
 
   // Address verification
   addressStatus  KycFieldStatus @default(UNVERIFIED)
   addressText    String?
-  addressDocUrl  String?        // S3 URL of proof document
-  addressDocType String?        // utility_bill | bank_statement | tenancy_agreement
+  addressDocUrl  String? // S3 URL of proof document
+  addressDocType String? // utility_bill | bank_statement | tenancy_agreement
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -998,19 +1010,19 @@ model KycVerificationBadge {
   auth   Auth   @relation(fields: [authId], references: [id])
 
   // Badge state
-  isActive         Boolean   @default(false)
-  isAdminGranted   Boolean   @default(false)  // manually given by admin
-  grantedAt        DateTime?
-  revokedAt        DateTime?
+  isActive       Boolean   @default(false)
+  isAdminGranted Boolean   @default(false) // manually given by admin
+  grantedAt      DateTime?
+  revokedAt      DateTime?
 
   // Monthly billing
-  nextBillingDate  DateTime?
-  gracePeriodEnd   DateTime? // set when payment fails; badge removed after this
-  lastBilledAt     DateTime?
+  nextBillingDate DateTime?
+  gracePeriodEnd  DateTime? // set when payment fails; badge removed after this
+  lastBilledAt    DateTime?
 
   // Admin fee exemption
-  isFeeExempt      Boolean   @default(false)
-  feeExemptUntil   DateTime?
+  isFeeExempt    Boolean   @default(false)
+  feeExemptUntil DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1020,7 +1032,7 @@ model KycVerificationBadge {
 
 enum KycFieldStatus {
   UNVERIFIED
-  PENDING_REVIEW   // address doc submitted, awaiting admin review
+  PENDING_REVIEW // address doc submitted, awaiting admin review
   VERIFIED
   REJECTED
 }
@@ -1034,9 +1046,9 @@ model JobTitle {
 }
 
 model Industry {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  sector   String    // Parent sector e.g. "Technology"
+  id     Int    @id @default(autoincrement())
+  name   String @unique
+  sector String // Parent sector e.g. "Technology"
 
   @@index([name])
   @@index([sector])
@@ -1049,16 +1061,16 @@ model Industry {
 /// read back with a normal include; exactly one of them is set, which the
 /// service enforces and a database check constraint backs up.
 model SavedItem {
-  id          String     @id @default(uuid())
-  authId      String
-  auth        Auth       @relation(fields: [authId], references: [id])
-  postId      String?
-  post        Post?      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  forumPostId String?
-  forumPost   ForumPost? @relation(fields: [forumPostId], references: [id], onDelete: Cascade)
+  id           String      @id @default(uuid())
+  authId       String
+  auth         Auth        @relation(fields: [authId], references: [id])
+  postId       String?
+  post         Post?       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  forumPostId  String?
+  forumPost    ForumPost?  @relation(fields: [forumPostId], references: [id], onDelete: Cascade)
   forumReplyId String?
   forumReply   ForumReply? @relation(fields: [forumReplyId], references: [id], onDelete: Cascade)
-  createdAt   DateTime   @default(now())
+  createdAt    DateTime    @default(now())
 
   @@unique([authId, postId])
   @@unique([authId, forumPostId])

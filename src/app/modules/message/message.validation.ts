@@ -9,6 +9,12 @@ export const sendMessageZod = z
     file: z.string().optional(),
     fileType: z.enum(["IMAGE", "VIDEO", "AUDIO", "DOC", "OFFER"]).optional(),
     link: z.string().optional(),
+    // Set when the message is a private reply to a forum post, so the
+    // recipient can see what it is about.
+    forumPostId: z
+      .string()
+      .uuid({ message: "forumPostId must be a valid UUID" })
+      .optional(),
   })
   .refine(
     data => {
