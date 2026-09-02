@@ -198,6 +198,33 @@ const distinctReplyAvatars = (
   return avatars;
 };
 
+/**
+ * Reading a community's forum.
+ *
+ * A public community is a shop window -- Explore lets you look before you
+ * join, so anyone signed in may read it. A private one is not: its posts were
+ * readable by any signed-in stranger who knew the group id, which is what this
+ * closes. Writing still needs membership either way; that is assertMember.
+ */
+const assertCanRead = async (groupId: string, authId: string) => {
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { isPrivate: true },
+  });
+  if (!group) {
+    throw new ApiError(404, "That community no longer exists.");
+  }
+  if (!group.isPrivate) return;
+
+  const participant = await prisma.chatParticipant.findFirst({
+    where: { authId, chat: { groupId } },
+    select: { id: true },
+  });
+  if (!participant) {
+    throw new ApiError(403, "This community is private.");
+  }
+};
+
 const assertMember = async (groupId: string, authId: string) => {
   const participant = await prisma.chatParticipant.findFirst({
     where: { authId, chat: { groupId } },
@@ -213,6 +240,8 @@ const getGroupForumPosts = async (
   options: TPaginationOptions,
   authId: string
 ) => {
+  await assertCanRead(groupId, authId);
+
   const { page, take, skip, sortBy, orderBy } = calculatePagination(options);
 
   const where: Prisma.ForumPostWhereInput = { groupId };
@@ -327,8 +356,8 @@ const getForumPost = async (postId: string, authId: string) => {
   if (!post) {
     throw new ApiError(404, "That forum post no longer exists.");
   }
-  // Same rule as the feed: you see a community's posts by being in it.
-  await assertMember(post.groupId, authId);
+  // The same rule as the feed: public is readable, private needs membership.
+  await assertCanRead(post.groupId, authId);
 
   const canModerate = (await moderatorRoleIn(post.groupId, authId)) !== null;
 
@@ -551,6 +580,9 @@ const getForumReplies = async (
     },
   });
   if (!post) throw new ApiError(404, "Post not found.");
+  // A private community's replies were readable by any signed-in stranger,
+  // the same gap the feed had.
+  await assertCanRead(post.groupId, authId);
 
   // Only top-level replies are paged; their children ride along, so a thread
   // arrives whole rather than split across pages.
@@ -872,6 +904,14 @@ const getReplyThread = async (
   options: TPaginationOptions
 ) => {
   const { page, take, skip } = calculatePagination(options);
+
+  // The thread belongs to a post, which belongs to a community. Same rule.
+  const parent = await prisma.forumReply.findUnique({
+    where: { id: replyId },
+    select: { post: { select: { groupId: true } } },
+  });
+  if (!parent) throw new ApiError(404, "Reply not found.");
+  await assertCanRead(parent.post.groupId, authId);
 
   const children = await prisma.forumReply.findMany({
     where: { parentId: replyId },
