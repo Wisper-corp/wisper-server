@@ -26,6 +26,12 @@ router.post(
   forumController.createForumPost
 );
 
+router.get(
+  "/:id",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  forumController.getForumPost
+);
+
 router.delete(
   "/:id",
   authorize(UserRole.PERSON, UserRole.BUSINESS),

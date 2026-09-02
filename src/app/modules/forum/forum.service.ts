@@ -294,6 +294,75 @@ const getGroupForumPosts = async (
   return { meta: { page, limit: take, total }, posts: shaped };
 };
 
+/**
+ * One post, shaped exactly as the feed shapes it.
+ *
+ * A private reply carries the post it is about, and tapping that card has to
+ * open the post itself -- but the app only holds a preview of it, and the feed
+ * endpoint pages a whole community. This fetches the one.
+ */
+const getForumPost = async (postId: string, authId: string) => {
+  const post = await prisma.forumPost.findUnique({
+    where: { id: postId },
+    select: {
+      id: true,
+      text: true,
+      images: true,
+      isEdited: true,
+      createdAt: true,
+      groupId: true,
+      author: authorSelect,
+      _count: { select: { replies: true, reactions: true } },
+      reactions: { where: { authId }, select: { id: true }, take: 1 },
+      poll: pollSelect,
+      followers: { where: { authId }, select: { id: true }, take: 1 },
+      replies: {
+        take: REPLY_AVATAR_SCAN,
+        orderBy: { createdAt: "desc" },
+        select: { author: authorSelect },
+      },
+    },
+  });
+
+  if (!post) {
+    throw new ApiError(404, "That forum post no longer exists.");
+  }
+  // Same rule as the feed: you see a community's posts by being in it.
+  await assertMember(post.groupId, authId);
+
+  const canModerate = (await moderatorRoleIn(post.groupId, authId)) !== null;
+
+  let myVote: string | null = null;
+  if (post.poll?.id) {
+    const vote = await prisma.forumPollVote.findFirst({
+      where: { authId, pollId: post.poll.id },
+      select: { optionId: true },
+    });
+    myVote = vote?.optionId ?? null;
+  }
+
+  const saved = await savedServices.savedPostIds(authId, [post.id], "forum");
+
+  return {
+    id: post.id,
+    text: post.text,
+    images: post.images,
+    isEdited: post.isEdited,
+    createdAt: post.createdAt,
+    groupId: post.groupId,
+    author: shapeAuthor(post.author),
+    replyCount: post._count.replies,
+    reactionCount: post._count.reactions,
+    hasReacted: post.reactions.length > 0,
+    isFollowing: post.followers.length > 0,
+    poll: shapePoll(post.poll as RawPoll, myVote),
+    isMine: post.author.id === authId,
+    isSaved: saved.has(post.id),
+    canDelete: post.author.id === authId || canModerate,
+    replyAvatars: distinctReplyAvatars(post.replies),
+  };
+};
+
 /// A forum post carries at most this many attachments.
 ///
 /// They arrive on the `images` field and are stored in the `images` column,
@@ -821,6 +890,7 @@ const getReplyThread = async (
 
 export const forumServices = {
   getGroupForumPosts,
+  getForumPost,
   createForumPost,
   deleteForumPost,
   deleteForumReply,

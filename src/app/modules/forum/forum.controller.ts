@@ -17,6 +17,17 @@ const getGroupForumPosts = handleAsyncRequest(async (req: TRequest, res) => {
   });
 });
 
+const getForumPost = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await forumServices.getForumPost(
+    req.params.id as string,
+    req.user!.id
+  );
+  sendResponse(res, {
+    message: "Forum post retrieved successfully!",
+    data: result,
+  });
+});
+
 const createForumPost = handleAsyncRequest(async (req: TRequest, res) => {
   const result = await forumServices.createForumPost(
     req.body,
@@ -121,6 +132,7 @@ const getReplyThread = handleAsyncRequest(async (req: TRequest, res) => {
 
 export const forumController = {
   getGroupForumPosts,
+  getForumPost,
   createForumPost,
   deleteForumPost,
   deleteForumReply,
