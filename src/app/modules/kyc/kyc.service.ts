@@ -155,8 +155,8 @@ const sendSmsOtp = async (phone: string): Promise<void> => {
 
   await sendSms(
     phone,
-    `Your Wisper phone verification code is: ${rawOtp}. ` +
-      `Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code.`
+    `Hi! Your Wisper OTP is ${rawOtp}. ` +
+      `It expires in ${OTP_EXPIRY_MINUTES} minutes.`
   );
 };
 
