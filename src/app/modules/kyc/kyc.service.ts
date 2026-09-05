@@ -13,9 +13,54 @@ const BADGE_FEE = 6500;
 const MIN_RECOMMENDATIONS = 20;
 const MAX_NIN_ATTEMPTS = 3;
 
+/// How many times a verified email or phone may be swapped for a different one.
+///
+/// Setting it the first time is not a change, and re-confirming the same value
+/// is not either -- only moving a verified contact to a new one counts.
+const MAX_CONTACT_CHANGES = 2;
+
 // ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
+
+/// Whether swapping a verified contact for [next] is still allowed, and what
+/// it would cost.
+///
+/// Returns `isChange: false` when there is nothing verified yet, or when the
+/// value is unchanged -- neither is spent from the allowance.
+const contactChange = (
+  current: string | null | undefined,
+  next: string,
+  used: number
+) => {
+  const isChange = Boolean(current) && current !== next;
+  return {
+    isChange,
+    used,
+    remaining: Math.max(0, MAX_CONTACT_CHANGES - used),
+    exhausted: isChange && used >= MAX_CONTACT_CHANGES,
+  };
+};
+
+/// Refuses a change once the allowance is gone. Called before an OTP is sent
+/// as well as at verification: the first stops a wasted SMS, the second is the
+/// one that actually protects the record.
+const assertContactChangeAllowed = (
+  what: "email" | "phone number",
+  current: string | null | undefined,
+  next: string,
+  used: number
+) => {
+  const change = contactChange(current, next, used);
+  if (change.exhausted) {
+    throw new ApiError(
+      403,
+      `You have already changed your ${what} ${MAX_CONTACT_CHANGES} times. ` +
+        `Contact support if you need to change it again.`
+    );
+  }
+  return change;
+};
 
 /** Upsert (get-or-create) KycVerification row for a user */
 const getOrCreateKyc = async (authId: string) => {
@@ -91,20 +136,48 @@ const sendEmailOtp = async (authId: string, email: string) => {
   });
   if (existing) throw new ApiError(400, "Email is already used by another account.");
 
+  // Checked here too, so someone out of changes is told before an OTP goes out
+  // rather than after they have typed the code in.
+  const kyc = await getOrCreateKyc(authId);
+  assertContactChangeAllowed(
+    "email",
+    kyc.verifiedEmail,
+    email,
+    kyc.emailChangeCount
+  );
+
   await issueEmailOtp(email, "Wisper — Email Verification OTP");
   return { message: "OTP sent to " + email };
 };
 
 const verifyEmail = async (authId: string, email: string, otp: string) => {
+  // The allowance is read before the code is spent, so a refusal does not also
+  // burn the OTP.
+  const kyc = await getOrCreateKyc(authId);
+  const change = assertContactChangeAllowed(
+    "email",
+    kyc.verifiedEmail,
+    email,
+    kyc.emailChangeCount
+  );
+
   await verifyOtpCode(email, otp);
 
-  await prisma.kycVerification.upsert({
+  await prisma.kycVerification.update({
     where: { authId },
-    create: { authId, emailStatus: KycFieldStatus.VERIFIED, verifiedEmail: email },
-    update: { emailStatus: KycFieldStatus.VERIFIED, verifiedEmail: email },
+    data: {
+      emailStatus: KycFieldStatus.VERIFIED,
+      verifiedEmail: email,
+      // Only a move to a different address costs one.
+      ...(change.isChange ? { emailChangeCount: { increment: 1 } } : {}),
+    },
   });
 
-  return { message: "Email verified successfully." };
+  return {
+    message: "Email verified successfully.",
+    changesUsed: kyc.emailChangeCount + (change.isChange ? 1 : 0),
+    maxChanges: MAX_CONTACT_CHANGES,
+  };
 };
 
 // ─────────────────────────────────────────────
@@ -161,21 +234,44 @@ const sendSmsOtp = async (phone: string): Promise<void> => {
 };
 
 const sendPhoneOtp = async (authId: string, phone: string) => {
-  await getOrCreateKyc(authId);
+  const kyc = await getOrCreateKyc(authId);
+  // An SMS costs money; refuse before sending one that cannot be used.
+  assertContactChangeAllowed(
+    "phone number",
+    kyc.verifiedPhone,
+    phone,
+    kyc.phoneChangeCount
+  );
+
   await sendSmsOtp(phone);
   return { message: "OTP sent to " + phone };
 };
 
 const verifyPhone = async (authId: string, phone: string, otp: string) => {
+  const kyc = await getOrCreateKyc(authId);
+  const change = assertContactChangeAllowed(
+    "phone number",
+    kyc.verifiedPhone,
+    phone,
+    kyc.phoneChangeCount
+  );
+
   await verifyPhoneOtpCode(phone, otp);
 
-  await prisma.kycVerification.upsert({
+  await prisma.kycVerification.update({
     where: { authId },
-    create: { authId, phoneStatus: KycFieldStatus.VERIFIED, verifiedPhone: phone },
-    update: { phoneStatus: KycFieldStatus.VERIFIED, verifiedPhone: phone },
+    data: {
+      phoneStatus: KycFieldStatus.VERIFIED,
+      verifiedPhone: phone,
+      ...(change.isChange ? { phoneChangeCount: { increment: 1 } } : {}),
+    },
   });
 
-  return { message: "Phone number verified successfully." };
+  return {
+    message: "Phone number verified successfully.",
+    changesUsed: kyc.phoneChangeCount + (change.isChange ? 1 : 0),
+    maxChanges: MAX_CONTACT_CHANGES,
+  };
 };
 
 // ─────────────────────────────────────────────
@@ -387,10 +483,18 @@ const getKycStatus = async (authId: string) => {
     email: {
       status: kyc?.emailStatus ?? KycFieldStatus.UNVERIFIED,
       verifiedEmail: kyc?.verifiedEmail ?? null,
+      // So the app can say how many are left before someone types a new one,
+      // rather than only finding out when the change is refused.
+      changesUsed: kyc?.emailChangeCount ?? 0,
+      maxChanges: MAX_CONTACT_CHANGES,
+      canChange: (kyc?.emailChangeCount ?? 0) < MAX_CONTACT_CHANGES,
     },
     phone: {
       status: kyc?.phoneStatus ?? KycFieldStatus.UNVERIFIED,
       verifiedPhone: kyc?.verifiedPhone ?? null,
+      changesUsed: kyc?.phoneChangeCount ?? 0,
+      maxChanges: MAX_CONTACT_CHANGES,
+      canChange: (kyc?.phoneChangeCount ?? 0) < MAX_CONTACT_CHANGES,
     },
     nin: {
       status: kyc?.ninStatus ?? KycFieldStatus.UNVERIFIED,

@@ -987,9 +987,16 @@ model KycVerification {
   emailStatus   KycFieldStatus @default(UNVERIFIED)
   verifiedEmail String? // the email that was verified
 
+  // How many times the verified address has been swapped for a different one.
+  // Setting it the first time is not a change; re-confirming the same one is
+  // not either. Capped, so a verified identity cannot be moved around freely.
+  emailChangeCount Int @default(0)
+
   // Phone verification
   phoneStatus   KycFieldStatus @default(UNVERIFIED)
   verifiedPhone String? // the phone that was verified
+
+  phoneChangeCount Int @default(0)
 
   // NIN verification (via QoreID)
   ninStatus    KycFieldStatus @default(UNVERIFIED)
