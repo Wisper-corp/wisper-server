@@ -19,7 +19,12 @@ const verifyEmail = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const { email, otp } = req.body;
   if (!email || !otp) throw new ApiError(400, "email and otp are required");
   const result = await kycService.verifyEmail(authId, email, otp);
-  sendResponse(res, { message: result.message, data: null });
+  // The allowance goes back with the answer, so the screen can say how many
+  // changes are left without a second call.
+  sendResponse(res, {
+    message: result.message,
+    data: { changesUsed: result.changesUsed, maxChanges: result.maxChanges },
+  });
 });
 
 // ── Phone ──────────────────────────────────────────────────────────────────
@@ -36,7 +41,12 @@ const verifyPhone = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const { phone, otp } = req.body;
   if (!phone || !otp) throw new ApiError(400, "phone and otp are required");
   const result = await kycService.verifyPhone(authId, phone, otp);
-  sendResponse(res, { message: result.message, data: null });
+  // The allowance goes back with the answer, so the screen can say how many
+  // changes are left without a second call.
+  sendResponse(res, {
+    message: result.message,
+    data: { changesUsed: result.changesUsed, maxChanges: result.maxChanges },
+  });
 });
 
 // ── NIN ────────────────────────────────────────────────────────────────────
