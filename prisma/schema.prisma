@@ -1098,6 +1098,25 @@ model SavedItem {
 /// Separate from [Otp] because that table's `email` column is a foreign key to
 /// auths.email — a phone number can never satisfy it, so phone verification
 /// could not store a code at all.
+/// KYC email OTPs, kept apart from `otps`.
+///
+/// `otps.email` is a foreign key to `auths.email`, so a code could only ever
+/// be issued to an address that already owned an account -- which made
+/// changing your KYC email impossible. Phone hit the same wall and was given
+/// its own table; this is the same fix for email.
+model KycEmailOtp {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  otp        String
+  expires    DateTime
+  attempts   Int      @default(0)
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("kyc_email_otps")
+}
+
 model PhoneOtp {
   id         String   @id @default(uuid())
   phone      String   @unique

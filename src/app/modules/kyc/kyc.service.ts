@@ -77,7 +77,11 @@ const issueEmailOtp = async (email: string, subject: string) => {
   const hashed = await bcrypt.hash(rawOtp, 10);
   const expires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-  await prisma.otp.upsert({
+  // Its own table: `otps.email` is a foreign key to auths.email, so a code
+  // could only ever be issued to an address that already owned an account --
+  // which meant a KYC email could never be changed to a new one. Phone hit
+  // the same wall and was given its own table; this matches it.
+  await prisma.kycEmailOtp.upsert({
     where: { email },
     create: { email, otp: hashed, expires, attempts: 0, isVerified: false },
     update: { otp: hashed, expires, attempts: 0, isVerified: false },
@@ -102,7 +106,7 @@ const issueEmailOtp = async (email: string, subject: string) => {
 
 /** Verify OTP from otps table, throw on mismatch/expired */
 const verifyOtpCode = async (email: string, code: string) => {
-  const record = await prisma.otp.findUnique({ where: { email } });
+  const record = await prisma.kycEmailOtp.findUnique({ where: { email } });
   if (!record || record.isVerified) {
     throw new ApiError(400, "No active OTP found. Please request a new one.");
   }
@@ -113,7 +117,7 @@ const verifyOtpCode = async (email: string, code: string) => {
     throw new ApiError(400, "Too many attempts. Please request a new OTP.");
   }
 
-  await prisma.otp.update({
+  await prisma.kycEmailOtp.update({
     where: { email },
     data: { attempts: { increment: 1 } },
   });
@@ -122,7 +126,7 @@ const verifyOtpCode = async (email: string, code: string) => {
   if (!matched) throw new ApiError(400, "Invalid OTP. Please try again.");
 
   // Mark used
-  await prisma.otp.update({ where: { email }, data: { isVerified: true } });
+  await prisma.kycEmailOtp.update({ where: { email }, data: { isVerified: true } });
 };
 
 // ─────────────────────────────────────────────
