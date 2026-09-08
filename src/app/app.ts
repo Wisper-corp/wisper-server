@@ -20,6 +20,10 @@ app.use(
       // on the App Store and Play Store. The apex joinwisper.com is a separate
       // WordPress site and does not call this API.
       "https://app.joinwisper.com",
+      // The Vercel deployment the site is served from until the custom domain
+      // is pointed at it. Kept afterwards so a deploy can be checked without
+      // touching the live domain.
+      "https://wisper-web-wispergroupcorporation-5621s-projects.vercel.app",
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
