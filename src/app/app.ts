@@ -9,9 +9,18 @@ const app: Application = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Browsers only. A native app sends no Origin header and is not subject to
+// any of this, so adding an entry here cannot affect the mobile app.
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://72.244.153.29:3000"],
+    origin: [
+      "http://localhost:3000",
+      "http://72.244.153.29:3000",
+      // Where people onboard and post their services while the app is waiting
+      // on the App Store and Play Store. The apex joinwisper.com is a separate
+      // WordPress site and does not call this API.
+      "https://app.joinwisper.com",
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   })
