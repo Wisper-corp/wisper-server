@@ -111,6 +111,10 @@ model Person {
   defaultResumeId String?  @unique
   defaultResume   Resume?  @relation(fields: [defaultResumeId], references: [id])
   address         String?
+  /// The person whose shared profile link brought this account here. Set at
+  /// signup from the /u/<id> page the visitor came from; null for everyone who
+  /// arrived any other way, including every account made before this existed.
+  referredById  String?
   updatedAt       DateTime @updatedAt
 
   @@map("persons")

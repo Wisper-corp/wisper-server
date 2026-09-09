@@ -17,4 +17,12 @@ router.patch(
   adminController.updateProfile
 );
 
+// The web signup site's numbers, and the people behind them. Admin only.
+router.get("/web/stats", authorize(UserRole.ADMIN), adminController.getWebStats);
+router.get(
+  "/web/customers",
+  authorize(UserRole.ADMIN),
+  adminController.getWebCustomers
+);
+
 export const adminRoutes = router;

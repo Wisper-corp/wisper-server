@@ -26,7 +26,33 @@ const updateProfile = handleAsyncRequest(
   }
 );
 
+const getWebStats = handleAsyncRequest(async (_req: TRequest, res: Response) => {
+  const result = await adminServices.getWebStats();
+  sendResponse(res, { message: "Stats retrieved successfully!", data: result });
+});
+
+const getWebCustomers = handleAsyncRequest(
+  async (req: TRequest, res: Response) => {
+    const take = Math.min(Number(req.query.limit) || 50, 200);
+    const skip = Number(req.query.skip) || 0;
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+
+    const result = await adminServices.getWebCustomers({
+      search: search || undefined,
+      skip,
+      take,
+    });
+    sendResponse(res, {
+      message: "Customers retrieved successfully!",
+      data: result,
+    });
+  }
+);
+
 export const adminController = {
+  getWebStats,
+  getWebCustomers,
   getProfile,
   updateProfile,
 };

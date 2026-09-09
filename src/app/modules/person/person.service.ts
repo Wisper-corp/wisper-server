@@ -27,6 +27,17 @@ const signUp = async (payload: TPersonSignUp) => {
 
   if (existingUser) throw new ApiError(400, "User already exists!");
 
+  // Who sent them here. Comes from the shared profile the visitor was looking
+  // at; ignored unless it names a real person, so a junk value cannot poison
+  // the referral figures.
+  if (payload.person.referredById) {
+    const referrer = await prisma.person.findUnique({
+      where: { id: payload.person.referredById },
+      select: { id: true },
+    });
+    if (!referrer) delete (payload.person as { referredById?: string }).referredById;
+  }
+
   // One account per WhatsApp number. Enforced here rather than with a unique
   // index because the column already holds duplicates from before this rule,
   // and an index would refuse to build over them.

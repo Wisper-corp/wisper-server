@@ -10,6 +10,9 @@ export const personSignupZod = z.object({
     title: z
       .string({ message: "Title is required" })
       .min(4, "Title is too short"),
+    // The profile whose shared link brought them. Optional, and checked
+    // against a real person in the service before it is stored.
+    referredById: z.string().uuid().optional(),
   }),
 });
 
