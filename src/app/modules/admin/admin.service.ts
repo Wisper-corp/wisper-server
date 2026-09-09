@@ -44,6 +44,22 @@ const updateProfile = async (
 };
 
 
+
+/**
+ * The seeded conversation agents, which are accounts only in the sense that
+ * they have rows. Thirty of them against a hundred-odd real signups is a
+ * fifth of the total, so leaving them in does not just clutter the customer
+ * list -- it drags every rate on the overview down by a quarter.
+ *
+ * They are identifiable by the internal domain their addresses use, which
+ * nothing real can register.
+ */
+const AGENT_EMAIL_DOMAIN = "@agents.wisperonline.internal";
+
+const notAnAgent: Prisma.StringFilter = {
+  not: { endsWith: AGENT_EMAIL_DOMAIN },
+};
+
 /**
  * The numbers behind the web signup site.
  *
@@ -52,22 +68,36 @@ const updateProfile = async (
  * one person posting nine is not nine people posting.
  */
 const getWebStats = async () => {
+  const realPerson = { email: notAnAgent };
+  const realAuthor = { author: { email: notAnAgent } };
+
   const [registered, referred, posters, reviewed, services, reviews] =
     await Promise.all([
-      prisma.person.count(),
-      prisma.person.count({ where: { NOT: { referredById: null } } }),
+      prisma.person.count({ where: realPerson }),
+      prisma.person.count({
+        where: { ...realPerson, NOT: { referredById: null } },
+      }),
       prisma.post
-        .findMany({ select: { authorId: true }, distinct: ["authorId"] })
+        .findMany({
+          where: realAuthor,
+          select: { authorId: true },
+          distinct: ["authorId"],
+        })
         .then(rows => rows.length),
       prisma.recommendation
         .findMany({
-          where: { NOT: { receiverId: null } },
+          where: {
+            NOT: { receiverId: null },
+            receiver: { email: notAnAgent },
+          },
           select: { receiverId: true },
           distinct: ["receiverId"],
         })
         .then(rows => rows.length),
-      prisma.post.count(),
-      prisma.recommendation.count(),
+      prisma.post.count({ where: realAuthor }),
+      prisma.recommendation.count({
+        where: { receiver: { email: notAnAgent } },
+      }),
     ]);
 
   const rate = (n: number) =>
@@ -104,6 +134,7 @@ const getWebCustomers = async (opts: {
   const where: Prisma.AuthWhereInput = {
     role: UserRole.PERSON,
     person: { isNot: null },
+    email: notAnAgent,
     ...(opts.search
       ? {
           person: {
