@@ -24,6 +24,10 @@ app.use(
       // is pointed at it. Kept afterwards so a deploy can be checked without
       // touching the live domain.
       "https://wisper-web-wispergroupcorporation-5621s-projects.vercel.app",
+      // The admin view of that site. A different origin from the API even
+      // though it shares the domain, so it needs naming here like any other.
+      "https://admin.wisperonline.com",
+      "https://wisper-admin-wispergroupcorporation-5621s-projects.vercel.app",
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
