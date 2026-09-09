@@ -537,8 +537,30 @@ const getPublicProfile = async (personId: string) => {
     },
   });
 
+  const reviews = await prisma.recommendation.findMany({
+    where: { receiverId: auth.id },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      rating: true,
+      text: true,
+      createdAt: true,
+      giver: {
+        select: {
+          person: { select: { name: true, image: true, title: true } },
+          business: { select: { name: true, image: true } },
+        },
+      },
+    },
+  });
+
   return {
     id: person.id,
+    // The id a review is addressed to. Opaque, and needed by anyone who wants
+    // to leave one -- the profile is reached by person id, but a
+    // recommendation is filed against the auth row.
+    authId: auth.id,
     name: person.name,
     image: person.image,
     title: person.title,
@@ -547,6 +569,7 @@ const getPublicProfile = async (personId: string) => {
     avgRating: rating._avg.rating ?? 0,
     ratingCount: rating._count.rating ?? 0,
     posts,
+    reviews,
   };
 };
 
