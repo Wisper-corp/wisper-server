@@ -338,7 +338,32 @@ const pay = async (id: string, userId: string) => {
   return release(id, userId);
 };
 
+
+/**
+ * Every offer addressed to this person, newest first.
+ *
+ * The per-chat lookup cannot answer "show me my offers" without walking every
+ * conversation, so this queries receiverId directly. Sender details come along
+ * because a list of offers with no idea who sent them is not usable.
+ */
+const getMine = async (authId: string) => {
+  return prisma.offer.findMany({
+    where: { receiverId: authId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      sender: {
+        select: {
+          id: true,
+          person: { select: { name: true, image: true, title: true } },
+          business: { select: { name: true, image: true } },
+        },
+      },
+    },
+  });
+};
+
 export const offerService = {
+  getMine,
   create,
   getByChatId,
   getById,

@@ -142,6 +142,9 @@ model Post {
   isSponsored   Boolean       @default(false)
   commentAccess CommentAccess
   price         Float?
+  // FIXED | MONTHLY | HOURLY -- how the price should be read. Plain text
+  // rather than an enum so an older client sending nothing still writes.
+  priceType     String?       @default("FIXED")
   deliveryTime  String?
   currency      String?       @default("NGN")
   createdAt     DateTime      @default(now())

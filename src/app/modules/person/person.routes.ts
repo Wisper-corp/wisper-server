@@ -23,6 +23,12 @@ router.get(
   authorize(UserRole.PERSON, UserRole.BUSINESS),
   personController.getGroupRoles
 );
+// A shared profile link has to open for someone who has no account yet, so
+// this one is deliberately unauthenticated. It returns only what a profile
+// page shows -- name, title, image, location, join date -- and never the
+// email or phone.
+router.get("/public/:id", personController.getPublicProfile);
+
 router.get(
   "/:id",
   authorize(UserRole.ADMIN, UserRole.PERSON, UserRole.BUSINESS),

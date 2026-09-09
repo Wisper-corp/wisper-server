@@ -102,7 +102,16 @@ const dispute = handleAsyncRequest(async (req: TRequest, res: Response) => {
   });
 });
 
+const getMine = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const result = await offerService.getMine(req.user!.id);
+  sendResponse(res, {
+    message: "Offers retrieved successfully!",
+    data: result,
+  });
+});
+
 export const offerController = {
+  getMine,
   create,
   getByChatId,
   getById,

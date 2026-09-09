@@ -89,7 +89,20 @@ const getGroupRoles = handleAsyncRequest(async (req: TRequest, res) => {
   });
 });
 
+const getPublicProfile = handleAsyncRequest(
+  async (req: TRequest, res: Response) => {
+    const result = await personServices.getPublicProfile(
+      req.params.id as string
+    );
+    sendResponse(res, {
+      message: "Profile retrieved successfully!",
+      data: result,
+    });
+  }
+);
+
 export const personController = {
+  getPublicProfile,
   signUp,
   getSingle,
   getMyProfile,

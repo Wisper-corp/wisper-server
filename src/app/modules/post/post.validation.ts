@@ -7,6 +7,7 @@ export const CreatePostZod = z.object({
     message: "Comment access must be either FOLLOWERS or EVERYONE",
   }),
   price: z.number().positive().optional(),
+  priceType: z.enum(["FIXED", "MONTHLY", "HOURLY"]).optional(),
   deliveryTime: z.string().optional(),
 });
 

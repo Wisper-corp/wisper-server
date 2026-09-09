@@ -19,6 +19,15 @@ router.get(
   offerController.getByChatId
 );
 
+// Every offer addressed to me, across all chats. Offers are otherwise only
+// reachable per-chat, which is no use to a screen that lists them all.
+// Declared before "/:id" so the literal "my" is not read as an offer id.
+router.get(
+  "/my",
+  authorize(UserRole.PERSON, UserRole.BUSINESS),
+  offerController.getMine
+);
+
 // Get a single offer
 router.get(
   "/:id",

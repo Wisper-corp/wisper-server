@@ -1,4 +1,4 @@
-import { Prisma, UserRole, UserStatus } from "@prisma/client";
+import { PostStatus, Prisma, UserRole, UserStatus } from "@prisma/client";
 import prisma from "../../utils/prisma";
 import { TPersonSignUp, TUpdatePersonProfile } from "./person.validation";
 import ApiError from "../../middlewares/classes/ApiError";
@@ -26,6 +26,25 @@ const signUp = async (payload: TPersonSignUp) => {
   });
 
   if (existingUser) throw new ApiError(400, "User already exists!");
+
+  // One account per WhatsApp number. Enforced here rather than with a unique
+  // index because the column already holds duplicates from before this rule,
+  // and an index would refuse to build over them.
+  if (payload.person.phone) {
+    const phoneTaken = await prisma.person.findFirst({
+      where: {
+        phone: payload.person.phone,
+        NOT: { email: payload.person.email },
+      },
+      select: { id: true },
+    });
+
+    if (phoneTaken)
+      throw new ApiError(
+        400,
+        "That WhatsApp number is already used by another account!"
+      );
+  }
 
   const hashedPassword = await bcrypt.hash(payload.password, 10);
   const authData = {
@@ -465,7 +484,74 @@ const getGroupRoles = async (
   return { meta, roles: mappedRoles };
 };
 
+
+/**
+ * A profile as a stranger sees it, for a shared link.
+ *
+ * Unauthenticated, so it is deliberately narrow: the fields a profile page
+ * renders and nothing else. Email and phone are excluded -- publishing a
+ * WhatsApp number to anyone holding a URL is not the same as showing it to
+ * the person who owns the profile.
+ */
+const getPublicProfile = async (personId: string) => {
+  const person = await prisma.person.findUnique({
+    where: { id: personId },
+    select: {
+      id: true,
+      name: true,
+      image: true,
+      title: true,
+      address: true,
+      email: true, // used below to reach the auth row, never returned
+    },
+  });
+
+  if (!person) throw new ApiError(404, "Profile not found!");
+
+  const auth = await prisma.auth.findUnique({
+    where: { email: person.email },
+    select: { id: true, createdAt: true, status: true },
+  });
+
+  if (!auth || auth.status !== UserStatus.ACTIVE)
+    throw new ApiError(404, "Profile not found!");
+
+  const rating = await prisma.recommendation.aggregate({
+    where: { receiverId: auth.id },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+
+  const posts = await prisma.post.findMany({
+    where: { authorId: auth.id, status: PostStatus.ACTIVE },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      caption: true,
+      images: true,
+      price: true,
+      currency: true,
+      deliveryTime: true,
+      createdAt: true,
+    },
+  });
+
+  return {
+    id: person.id,
+    name: person.name,
+    image: person.image,
+    title: person.title,
+    address: person.address,
+    joinedAt: auth.createdAt,
+    avgRating: rating._avg.rating ?? 0,
+    ratingCount: rating._count.rating ?? 0,
+    posts,
+  };
+};
+
 export const personServices = {
+  getPublicProfile,
   signUp,
   getSingle,
   getMyProfile,
