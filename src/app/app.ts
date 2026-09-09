@@ -26,7 +26,7 @@ app.use(
       "https://wisper-web-wispergroupcorporation-5621s-projects.vercel.app",
       // The admin view of that site. A different origin from the API even
       // though it shares the domain, so it needs naming here like any other.
-      "https://admin.wisperonline.com",
+      "https://admin.joinwisper.com",
       "https://wisper-admin-wispergroupcorporation-5621s-projects.vercel.app",
     ],
     credentials: true,
