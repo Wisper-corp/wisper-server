@@ -1,4 +1,5 @@
 import { Recommendation, UserRole } from "@prisma/client";
+import ApiError from "../../middlewares/classes/ApiError";
 import prisma from "../../utils/prisma";
 import { sendNotificationToUser } from "../../utils/sendNotification";
 
@@ -18,6 +19,28 @@ const giveRecommendation = async (payload: Recommendation, authId: string) => {
     });
   }
   payload.giverId = authId;
+
+  // You cannot review the same person twice: a second review from the same
+  // account replaces the first. Without this one account could file five
+  // reviews for one profile, and the job board's five-review gate would mean
+  // nothing. Submitting still succeeds either way, so nothing that already
+  // posts a recommendation breaks -- it just stops stacking duplicates.
+  if (payload.receiverId) {
+    if (payload.receiverId === authId)
+      throw new ApiError(400, "You cannot review your own profile!");
+
+    const existing = await prisma.recommendation.findFirst({
+      where: { giverId: authId, receiverId: payload.receiverId },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return prisma.recommendation.update({
+        where: { id: existing.id },
+        data: { text: payload.text, rating: payload.rating },
+      });
+    }
+  }
 
   const result = await prisma.recommendation.create({ data: payload });
 
