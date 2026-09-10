@@ -102,7 +102,25 @@ const monnifyDisbursementWebhook = handleAsyncRequest(async (req: TRequest, res:
   }
 });
 
+const getSignupBonus = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const result = await walletService.getSignupBonus(req.user!.id);
+  sendResponse(res, {
+    message: 'Bonus retrieved successfully',
+    data: result,
+  });
+});
+
+const redeemSignupBonus = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const result = await walletService.redeemSignupBonus(req.user!.id);
+  sendResponse(res, {
+    message: 'Bonus redeemed successfully',
+    data: result,
+  });
+});
+
 export const walletController = {
+  getSignupBonus,
+  redeemSignupBonus,
   getWalletBalance,
   getWalletTransactions,
   monnifyWebhook,

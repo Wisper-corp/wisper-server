@@ -12,6 +12,10 @@ router.post('/withdraw', authorize(), walletController.withdrawFunds);
 router.post('/authorize-withdrawal', authorize(), walletController.authorizeWithdrawal);
 
 // Public webhook route (no auth required)
+// The signup bonus: what it needs, and taking it.
+router.get('/bonus', authorize(), walletController.getSignupBonus);
+router.post('/bonus/redeem', authorize(), walletController.redeemSignupBonus);
+
 router.post('/monnify/webhook', walletController.monnifyWebhook);
 router.post('/monnify/disbursement-webhook', walletController.monnifyDisbursementWebhook);
 

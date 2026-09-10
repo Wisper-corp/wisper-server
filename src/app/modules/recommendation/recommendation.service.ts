@@ -4,6 +4,16 @@ import prisma from "../../utils/prisma";
 import { sendNotificationToUser } from "../../utils/sendNotification";
 
 const giveRecommendation = async (payload: Recommendation, authId: string) => {
+  // A star on its own says nothing anyone can act on, and the rule was only
+  // held in the web form -- the API took a blank one happily.
+  if (!payload.text || !payload.text.trim())
+    throw new ApiError(400, "Please write a review with your rating!");
+
+  if (typeof payload.rating !== "number" || payload.rating < 1 || payload.rating > 5)
+    throw new ApiError(400, "Rating must be between 1 and 5!");
+
+  payload.text = payload.text.trim();
+
   if (payload.receiverId) {
     await prisma.auth.findUniqueOrThrow({
       where: {

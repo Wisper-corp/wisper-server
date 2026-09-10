@@ -70,6 +70,8 @@ model Auth {
   forumReplyReactions ForumReplyReaction[]
 
   @@map("auths")
+  bonusClaims     BonusClaim[]
+
 }
 
 model Otp {
@@ -1135,4 +1137,24 @@ model PhoneOtp {
   updatedAt  DateTime @updatedAt
 
   @@map("phone_otps")
+}
+
+/// One row per bonus a person has taken, so a bonus cannot be taken twice.
+/// Eligibility is not stored -- it is derived from the profile whenever it is
+/// asked for, because a photo can be removed and a service deleted, and a
+/// stored "eligible" flag would outlive the thing that earned it.
+model BonusClaim {
+  id        String   @id @default(uuid())
+  authId    String
+  auth      Auth     @relation(fields: [authId], references: [id])
+  /// SIGNUP_1GB for now. A string rather than an enum so another bonus does
+  /// not need a migration to exist.
+  kind      String
+  /// CLAIMED once taken. Becomes DISPENSED when the data actually lands,
+  /// which is Superjara's job and is not wired up yet.
+  status    String   @default("CLAIMED")
+  claimedAt DateTime @default(now())
+
+  @@unique([authId, kind])
+  @@map("bonus_claims")
 }

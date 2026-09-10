@@ -1,3 +1,4 @@
+import { PostStatus } from '@prisma/client';
 import prisma from '../../utils/prisma';
 import ApiError from '../../middlewares/classes/ApiError';
 
@@ -156,7 +157,44 @@ const initializeMonnifyPayment = async (authId: string, amount: number) => {
   const name = auth.person?.name || auth.business?.name || 'User';
   const transactionReference = `WSPR_${Date.now()}`;
 
-  return { transactionReference, amount, email, name, user_id: authId };
+  // The fields above are everything the mobile SDK needs -- it opens its own
+  // checkout. A browser has no SDK, so it needs somewhere to actually go, and
+  // Monnify will hand back a hosted checkout page for the same reference.
+  // Added alongside the existing fields rather than replacing them, so the app
+  // keeps reading exactly what it read before.
+  let checkoutUrl: string | null = null;
+  try {
+    const monnifyBaseUrl = process.env.MONNIFY_BASE_URL || 'https://api.monnify.com';
+    const accessToken = await getMonnifyToken();
+
+    const res = await fetch(`${monnifyBaseUrl}/api/v1/merchant/transactions/init-transaction`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount,
+        customerName: name,
+        customerEmail: email,
+        paymentReference: transactionReference,
+        paymentDescription: 'Wisper wallet top-up',
+        currencyCode: 'NGN',
+        contractCode: process.env.MONNIFY_CONTRACT_CODE,
+        redirectUrl: process.env.WALLET_REDIRECT_URL || 'https://app.joinwisper.com/wallet',
+        paymentMethods: ['CARD', 'ACCOUNT_TRANSFER', 'USSD'],
+      }),
+    });
+
+    const body = (await res.json()) as any;
+    checkoutUrl = body?.responseBody?.checkoutUrl ?? null;
+  } catch (error: any) {
+    // A checkout that could not be opened must not take the whole call down --
+    // the mobile path does not need it and still works.
+    console.error('Monnify init-transaction failed:', error?.message);
+  }
+
+  return { transactionReference, amount, email, name, user_id: authId, checkoutUrl };
 };
 
 // Helper: get Monnify access token
@@ -352,7 +390,90 @@ const authorizeWithdrawal = async (
   };
 };
 
+
+/** What the signup bonus asks for, and what it gives. */
+const SIGNUP_BONUS = {
+  kind: "SIGNUP_1GB",
+  label: "1GB Signup Bonus",
+  services: 2,
+  reviews: 3,
+} as const;
+
+/**
+ * Whether this person has earned the signup bonus, and whether they took it.
+ *
+ * Eligibility is worked out fresh each time rather than stored: a photo can be
+ * removed and a service deleted, and a saved "eligible" flag would outlive the
+ * thing that earned it. A claim, by contrast, is a fact and is stored.
+ */
+const getSignupBonus = async (authId: string) => {
+  const [auth, services, reviews, claim] = await Promise.all([
+    prisma.auth.findUnique({
+      where: { id: authId },
+      select: { person: { select: { image: true } } },
+    }),
+    prisma.post.count({ where: { authorId: authId, status: PostStatus.ACTIVE } }),
+    prisma.recommendation.count({ where: { receiverId: authId } }),
+    prisma.bonusClaim.findUnique({
+      where: { authId_kind: { authId, kind: SIGNUP_BONUS.kind } },
+    }),
+  ]);
+
+  const steps = [
+    { label: "Upload a profile photo", met: !!auth?.person?.image },
+    {
+      label: `Post ${SIGNUP_BONUS.services} services`,
+      met: services >= SIGNUP_BONUS.services,
+      detail: `${services} of ${SIGNUP_BONUS.services}`,
+    },
+    {
+      label: `Get ${SIGNUP_BONUS.reviews} reviews`,
+      met: reviews >= SIGNUP_BONUS.reviews,
+      detail: `${reviews} of ${SIGNUP_BONUS.reviews}`,
+    },
+  ];
+
+  return {
+    kind: SIGNUP_BONUS.kind,
+    label: SIGNUP_BONUS.label,
+    steps,
+    eligible: steps.every(s => s.met),
+    claimed: !!claim,
+    claimedAt: claim?.claimedAt ?? null,
+    status: claim?.status ?? null,
+  };
+};
+
+/**
+ * Takes the bonus, once.
+ *
+ * The unique constraint on (authId, kind) is what actually prevents a double
+ * claim -- two taps arriving together would both pass a read-then-write check.
+ */
+const redeemSignupBonus = async (authId: string) => {
+  const bonus = await getSignupBonus(authId);
+
+  if (bonus.claimed) throw new ApiError(400, "You have already redeemed this bonus!");
+  if (!bonus.eligible)
+    throw new ApiError(400, "Complete the steps above to redeem this bonus!");
+
+  try {
+    await prisma.bonusClaim.create({
+      data: { authId, kind: SIGNUP_BONUS.kind },
+    });
+  } catch {
+    throw new ApiError(400, "You have already redeemed this bonus!");
+  }
+
+  // The data itself is dispensed by Superjara, which is not connected yet.
+  // The claim is recorded either way so nobody can take it twice in the
+  // meantime, and so the backlog to dispense is known when it is.
+  return getSignupBonus(authId);
+};
+
 export const walletService = {
+  getSignupBonus,
+  redeemSignupBonus,
   getWalletBalance,
   getWalletTransactions,
   processMonnifyWebhook,
