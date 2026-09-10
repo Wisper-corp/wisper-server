@@ -6,18 +6,20 @@ import ApiError from '../../middlewares/classes/ApiError';
 const getWalletBalance = async (authId: string) => {
   let wallet = await prisma.wallet.findUnique({
     where: { authId },
-    select: { id: true, balance: true },
+    select: { id: true, balance: true, bonusBalance: true },
   });
 
   // Auto-create wallet if it doesn't exist yet
   if (!wallet) {
     wallet = await prisma.wallet.create({
       data: { authId, balance: 0 },
-      select: { id: true, balance: true },
+      select: { id: true, balance: true, bonusBalance: true },
     });
   }
 
-  return { balance: wallet.balance };
+  // bonusBalance is added alongside balance, never in place of it, so anything
+  // already reading this endpoint keeps reading what it read before.
+  return { balance: wallet.balance, bonusBalance: wallet.bonusBalance };
 };
 
 // Get wallet transactions

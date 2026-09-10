@@ -748,6 +748,11 @@ model Wallet {
   authId       String        @unique
   auth         Auth          @relation(fields: [authId], references: [id])
   balance      Float
+  /// Bonus payments credited to this person, in naira. Held apart from the
+  /// main balance rather than merged into it, so what was earned and what was
+  /// given stay legible -- and so a rule about spending one and not the other
+  /// remains possible later.
+  bonusBalance Float         @default(0)
   createdAt    DateTime      @default(now())
   transactions Transaction[]
 
