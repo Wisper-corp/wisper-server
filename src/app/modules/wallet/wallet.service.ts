@@ -17,9 +17,21 @@ const getWalletBalance = async (authId: string) => {
     });
   }
 
+  // The bonus wallet shows what is waiting to be earned, so it is worked out
+  // from the unclaimed bonuses rather than stored -- a stored figure would
+  // have to be written to every account up front and would drift the moment a
+  // bonus changed. The column stays for anything credited by hand.
+  const bonuses = await getBonuses(authId);
+  const waiting = bonuses
+    .filter(b => !b.claimed && b.credits > 0)
+    .reduce((sum, b) => sum + b.credits, 0);
+
   // bonusBalance is added alongside balance, never in place of it, so anything
   // already reading this endpoint keeps reading what it read before.
-  return { balance: wallet.balance, bonusBalance: wallet.bonusBalance };
+  return {
+    balance: wallet.balance,
+    bonusBalance: wallet.bonusBalance + waiting,
+  };
 };
 
 // Get wallet transactions
@@ -393,89 +405,181 @@ const authorizeWithdrawal = async (
 };
 
 
-/** What the signup bonus asks for, and what it gives. */
-const SIGNUP_BONUS = {
-  kind: "SIGNUP_1GB",
-  label: "1GB Signup Bonus",
-  services: 2,
-  reviews: 3,
+/**
+ * The bonuses, what each asks for, and what it pays.
+ *
+ * Kept as data rather than two near-identical functions, because the client
+ * has already changed the conditions twice and will again.
+ */
+const BONUSES = {
+  SIGNUP_1GB: {
+    kind: 'SIGNUP_1GB',
+    label: '1GB Signup Bonus',
+    reward: '1GB data',
+    /** Paid in data by Superjara, not in naira. */
+    credits: 0,
+  },
+  INVITE_10K: {
+    kind: 'INVITE_10K',
+    label: '₦10,000 Invite Bonus',
+    reward: '₦10,000',
+    credits: 10000,
+  },
 } as const;
 
+const SIGNUP_SERVICES = 2;
+const SIGNUP_REVIEWS = 3;
+const INVITES_REQUIRED = 10;
+
 /**
- * Whether this person has earned the signup bonus, and whether they took it.
+ * Everything needed to judge both bonuses, in one pass.
  *
- * Eligibility is worked out fresh each time rather than stored: a photo can be
- * removed and a service deleted, and a saved "eligible" flag would outlive the
- * thing that earned it. A claim, by contrast, is a fact and is stored.
+ * Eligibility is worked out fresh rather than stored: a photo can be removed,
+ * a service deleted and a KYC field rejected, and a saved "eligible" flag
+ * would outlive whatever earned it. A claim is a fact, so that is stored.
  */
-const getSignupBonus = async (authId: string) => {
-  const [auth, services, reviews, claim] = await Promise.all([
+const getBonuses = async (authId: string) => {
+  const [auth, services, reviews, claims, kyc, invites] = await Promise.all([
     prisma.auth.findUnique({
       where: { id: authId },
-      select: { person: { select: { image: true } } },
+      select: { person: { select: { id: true, image: true } } },
     }),
     prisma.post.count({ where: { authorId: authId, status: PostStatus.ACTIVE } }),
     prisma.recommendation.count({ where: { receiverId: authId } }),
-    prisma.bonusClaim.findUnique({
-      where: { authId_kind: { authId, kind: SIGNUP_BONUS.kind } },
+    prisma.bonusClaim.findMany({ where: { authId } }),
+    prisma.kycVerification.findUnique({
+      where: { authId },
+      select: {
+        emailStatus: true,
+        phoneStatus: true,
+        ninStatus: true,
+        addressStatus: true,
+      },
     }),
+    // "Invited" means someone signed up from this person's shared profile
+    // link. It is the only invite there is.
+    prisma.auth
+      .findUnique({ where: { id: authId }, select: { person: { select: { id: true } } } })
+      .then(a =>
+        a?.person?.id
+          ? prisma.person.count({ where: { referredById: a.person.id } })
+          : 0
+      ),
   ]);
 
-  const steps = [
-    { label: "Upload a profile photo", met: !!auth?.person?.image },
-    {
-      label: `Post ${SIGNUP_BONUS.services} services`,
-      met: services >= SIGNUP_BONUS.services,
-      detail: `${services} of ${SIGNUP_BONUS.services}`,
-    },
-    {
-      label: `Get ${SIGNUP_BONUS.reviews} reviews`,
-      met: reviews >= SIGNUP_BONUS.reviews,
-      detail: `${reviews} of ${SIGNUP_BONUS.reviews}`,
-    },
-  ];
+  const claimed = (kind: string) => claims.find(c => c.kind === kind) ?? null;
 
-  return {
-    kind: SIGNUP_BONUS.kind,
-    label: SIGNUP_BONUS.label,
-    steps,
-    eligible: steps.every(s => s.met),
-    claimed: !!claim,
-    claimedAt: claim?.claimedAt ?? null,
-    status: claim?.status ?? null,
+  const kycFields = [
+    kyc?.emailStatus,
+    kyc?.phoneStatus,
+    kyc?.ninStatus,
+    kyc?.addressStatus,
+  ];
+  const kycDone = kycFields.filter(f => f === 'VERIFIED').length;
+  const kycComplete = kycDone === kycFields.length;
+
+  const build = (
+    def: { kind: string; label: string; reward: string; credits: number },
+    steps: { label: string; met: boolean; detail?: string }[]
+  ) => {
+    const claim = claimed(def.kind);
+    return {
+      ...def,
+      steps,
+      eligible: steps.every(st => st.met),
+      claimed: !!claim,
+      claimedAt: claim?.claimedAt ?? null,
+      status: claim?.status ?? null,
+    };
   };
+
+  return [
+    build(BONUSES.SIGNUP_1GB, [
+      { label: 'Upload a profile photo', met: !!auth?.person?.image },
+      {
+        label: `Post ${SIGNUP_SERVICES} services`,
+        met: services >= SIGNUP_SERVICES,
+        detail: `${services} of ${SIGNUP_SERVICES}`,
+      },
+      {
+        label: `Get ${SIGNUP_REVIEWS} reviews`,
+        met: reviews >= SIGNUP_REVIEWS,
+        detail: `${reviews} of ${SIGNUP_REVIEWS}`,
+      },
+    ]),
+    build(BONUSES.INVITE_10K, [
+      {
+        label: 'Complete KYC',
+        met: kycComplete,
+        detail: `${kycDone} of ${kycFields.length} verified`,
+      },
+      {
+        label: `Invite ${INVITES_REQUIRED} people`,
+        met: invites >= INVITES_REQUIRED,
+        detail: `${invites} of ${INVITES_REQUIRED}`,
+      },
+    ]),
+  ];
 };
 
 /**
- * Takes the bonus, once.
+ * Takes one bonus, once, and pays it.
  *
- * The unique constraint on (authId, kind) is what actually prevents a double
- * claim -- two taps arriving together would both pass a read-then-write check.
+ * The unique key on (authId, kind) is what actually prevents a double claim --
+ * two taps arriving together would both pass a read-then-write check. The
+ * credit and the claim go in one transaction so a paid bonus is always a
+ * recorded one.
  */
-const redeemSignupBonus = async (authId: string) => {
-  const bonus = await getSignupBonus(authId);
+const redeemBonus = async (authId: string, kind: string) => {
+  const bonuses = await getBonuses(authId);
+  const bonus = bonuses.find(b => b.kind === kind);
 
-  if (bonus.claimed) throw new ApiError(400, "You have already redeemed this bonus!");
+  if (!bonus) throw new ApiError(404, 'Unknown bonus!');
+  if (bonus.claimed) throw new ApiError(400, 'You have already redeemed this bonus!');
   if (!bonus.eligible)
-    throw new ApiError(400, "Complete the steps above to redeem this bonus!");
+    throw new ApiError(400, 'Complete the steps above to redeem this bonus!');
 
   try {
-    await prisma.bonusClaim.create({
-      data: { authId, kind: SIGNUP_BONUS.kind },
+    await prisma.$transaction(async tx => {
+      await tx.bonusClaim.create({ data: { authId, kind } });
+
+      if (bonus.credits > 0) {
+        // Straight into the main balance: a bonus that cannot be withdrawn is
+        // not money to the person holding it. The bonus wallet is where it
+        // sits before it is earned, not after.
+        await tx.wallet.upsert({
+          where: { authId },
+          update: { balance: { increment: bonus.credits } },
+          create: { authId, balance: bonus.credits, bonusBalance: 0 },
+        });
+
+        await tx.transaction.create({
+          data: {
+            walletId: (await tx.wallet.findUniqueOrThrow({
+              where: { authId },
+              select: { id: true },
+            })).id,
+            type: 'DEPOSIT',
+            amount: bonus.credits,
+            date: new Date(),
+          },
+        });
+      }
     });
-  } catch {
-    throw new ApiError(400, "You have already redeemed this bonus!");
+  } catch (error: any) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(400, 'You have already redeemed this bonus!');
   }
 
-  // The data itself is dispensed by Superjara, which is not connected yet.
-  // The claim is recorded either way so nobody can take it twice in the
-  // meantime, and so the backlog to dispense is known when it is.
-  return getSignupBonus(authId);
+  // The 1GB itself is dispensed by Superjara, which is not connected yet. The
+  // claim is recorded either way, so nobody takes it twice and the backlog is
+  // known when it is.
+  return getBonuses(authId);
 };
 
 export const walletService = {
-  getSignupBonus,
-  redeemSignupBonus,
+  getBonuses,
+  redeemBonus,
   getWalletBalance,
   getWalletTransactions,
   processMonnifyWebhook,

@@ -102,16 +102,18 @@ const monnifyDisbursementWebhook = handleAsyncRequest(async (req: TRequest, res:
   }
 });
 
-const getSignupBonus = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const result = await walletService.getSignupBonus(req.user!.id);
+const getBonuses = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const result = await walletService.getBonuses(req.user!.id);
   sendResponse(res, {
-    message: 'Bonus retrieved successfully',
+    message: 'Bonuses retrieved successfully',
     data: result,
   });
 });
 
-const redeemSignupBonus = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const result = await walletService.redeemSignupBonus(req.user!.id);
+const redeemBonus = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  // Defaults to the signup bonus so the earlier single-bonus call keeps working.
+  const kind = (req.body?.kind as string) || 'SIGNUP_1GB';
+  const result = await walletService.redeemBonus(req.user!.id, kind);
   sendResponse(res, {
     message: 'Bonus redeemed successfully',
     data: result,
@@ -119,8 +121,8 @@ const redeemSignupBonus = handleAsyncRequest(async (req: TRequest, res: Response
 });
 
 export const walletController = {
-  getSignupBonus,
-  redeemSignupBonus,
+  getBonuses,
+  redeemBonus,
   getWalletBalance,
   getWalletTransactions,
   monnifyWebhook,
