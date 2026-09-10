@@ -421,8 +421,8 @@ const BONUSES = {
   },
   INVITE_10K: {
     kind: 'INVITE_10K',
-    label: '₦10,000 Invite Bonus',
-    reward: '₦10,000',
+    label: 'NGN 10,000 Invite Bonus',
+    reward: 'NGN 10,000',
     credits: 10000,
   },
 } as const;
