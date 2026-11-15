@@ -123,6 +123,67 @@ const localJobCondition = (): Prisma.JobWhereInput => ({
   ],
 });
 
+/**
+ * The public job board, for people who have not signed up.
+ *
+ * Separate from getAllJobs on purpose. That one answers "which jobs are
+ * relevant to this signed-in person" and leans on the caller being
+ * authorised; this one is served to anybody, so it returns only the fields a
+ * stranger may see -- never the author, who posted it, or anything that
+ * identifies a Wisper account.
+ */
+const getPublicJobs = async (query: Record<string, any>) => {
+  const page = Math.max(1, Number(query.page) || 1);
+  // Capped: a public endpoint with an unbounded limit is a free way to pull
+  // the whole table in one request.
+  const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.JobWhereInput = {};
+
+  if (query.searchTerm) {
+    where.OR = ["title", "companyName", "location", "industry"].map(field => ({
+      [field]: { contains: String(query.searchTerm), mode: "insensitive" },
+    }));
+  }
+
+  if (query.locationType) where.locationType = query.locationType;
+  if (query.type) where.type = query.type;
+
+  const [jobs, total] = await Promise.all([
+    prisma.job.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        companyName: true,
+        companyLogo: true,
+        location: true,
+        locationType: true,
+        type: true,
+        experienceLevel: true,
+        industry: true,
+        salary: true,
+        currency: true,
+        compensationType: true,
+        createdAt: true,
+        // Deliberately absent: authorId, description, applicationLink and
+        // applicationEmail. Applying happens in the app, and handing out the
+        // employer's address here would route around that entirely.
+      },
+    }),
+    prisma.job.count({ where }),
+  ]);
+
+  return {
+    meta: { page, limit, total, pages: Math.ceil(total / limit) },
+    jobs,
+  };
+};
+
 const getAllJobs = async (
   options: TPaginationOptions,
   query: Record<string, any>
@@ -472,6 +533,7 @@ const deleteJob = async (id: string, userId: string) => {
 export const jobServices = {
   createJob,
   getAllJobs,
+  getPublicJobs,
   getGroupJobs,
   getSingleJob,
   updateJob,

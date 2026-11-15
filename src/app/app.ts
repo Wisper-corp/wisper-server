@@ -17,8 +17,14 @@ app.use(
       "http://localhost:3000",
       "http://72.244.153.29:3000",
       // Where people onboard and post their services while the app is waiting
-      // on the App Store and Play Store. The apex joinwisper.com is a separate
-      // WordPress site and does not call this API.
+      // on the App Store and Play Store.
+      //
+      // The apex is the same site: it used to be a separate WordPress page
+      // that never called this API, which is why it was missing here. Once
+      // the site moved to joinwisper.com every request from it was refused by
+      // the browser and the app reported that it could not reach Wisper.
+      "https://joinwisper.com",
+      "https://www.joinwisper.com",
       "https://app.joinwisper.com",
       // The Vercel deployment the site is served from until the custom domain
       // is pointed at it. Kept afterwards so a deploy can be checked without

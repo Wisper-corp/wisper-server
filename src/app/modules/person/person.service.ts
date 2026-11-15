@@ -13,6 +13,18 @@ import {
 } from "../../utils/paginationCalculation";
 import { addUserToGeneralChat } from "../../utils/generalChat";
 
+/**
+ * How long an emailed code stays valid.
+ *
+ * Ten minutes, because delivery through an external relay routinely takes a
+ * minute or more and longer to Gmail under load. The old windows were two,
+ * three and five minutes depending on which path you came in by, so a code
+ * could expire while it was still in transit and the person was told it was
+ * wrong. Codes are single use and stored hashed, so the extra minutes cost
+ * nothing in safety.
+ */
+const OTP_EXPIRY_MINUTES = 10;
+
 const signUp = async (payload: TPersonSignUp) => {
   const existingUser = await prisma.auth.findUnique({
     where: {
@@ -84,7 +96,7 @@ const signUp = async (payload: TPersonSignUp) => {
     });
 
     const hashedOtp = await bcrypt.hash(otp.toString(), 10);
-    const otpExpires = new Date(Date.now() + 3 * 60 * 1000);
+    const otpExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     const otpData = {
       email: payload.person.email,
@@ -504,6 +516,93 @@ const getGroupRoles = async (
  * WhatsApp number to anyone holding a URL is not the same as showing it to
  * the person who owns the profile.
  */
+/**
+ * Members worth showing on the Home page.
+ *
+ * Only people who have put something up: a photo and either a service or a
+ * resume. A directory of blank avatars is worse than no directory, and the
+ * bar doubles as the nudge to finish a profile.
+ *
+ * Signed in only. It returns no email, phone or resume file -- the file is
+ * somebody's work history with their address in it, so the page says one
+ * exists and stops there.
+ */
+const discoverMembers = async (query: Record<string, any>) => {
+  const page = Math.max(1, Number(query.page) || 1);
+  const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
+  const skip = (page - 1) * limit;
+  const term = String(query.searchTerm ?? "").trim();
+
+  const where: Prisma.AuthWhereInput = {
+    role: "PERSON",
+    person: { is: { image: { not: null } } },
+    posts: { some: {} },
+  };
+
+  // Searched by the two things someone would actually type: who they are,
+  // and what they do.
+  if (term) {
+    where.AND = [
+      {
+        OR: [
+          { person: { is: { name: { contains: term, mode: "insensitive" } } } },
+          { person: { is: { title: { contains: term, mode: "insensitive" } } } },
+          { posts: { some: { caption: { contains: term, mode: "insensitive" } } } },
+        ],
+      },
+    ];
+  }
+
+  // Fetched whole, then filtered and paged here, because the test that
+  // matters -- is the service description actually saying anything -- is a
+  // string length, and Prisma cannot express that in a where clause. The
+  // directory is small enough that this costs nothing; if it grows past a
+  // few thousand people this wants a raw query with char_length().
+  const candidates = await prisma.auth.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        person: { select: { name: true, image: true, title: true, address: true } },
+        posts: {
+          take: 1,
+          orderBy: { createdAt: "desc" },
+          select: { id: true, caption: true, price: true },
+        },
+        _count: { select: { posts: true, resumes: true } },
+      },
+  });
+
+  // "hello", "test", "new comeback" are not services. A real description of
+  // work runs to a sentence, so the floor is set where a sentence begins --
+  // low enough to keep a terse but genuine listing, high enough to drop a
+  // greeting.
+  const MIN_SERVICE_CAPTION = 40;
+  const rows = candidates.filter(r => {
+    const caption = (r.posts[0]?.caption ?? "").trim();
+    return caption.length >= MIN_SERVICE_CAPTION;
+  });
+
+  const total = rows.length;
+  const paged = rows.slice(skip, skip + limit);
+
+  const members = paged.map(r => ({
+    id: r.id,
+    name: r.person?.name ?? "",
+    image: r.person?.image ?? null,
+    title: r.person?.title ?? null,
+    location: r.person?.address ?? null,
+    serviceCount: r._count.posts,
+    // Whether one exists, never where it lives.
+    hasResume: r._count.resumes > 0,
+    latestService: r.posts[0]
+      ? { id: r.posts[0].id, caption: r.posts[0].caption, price: r.posts[0].price }
+      : null,
+  }));
+
+  return { meta: { page, limit, total, pages: Math.ceil(total / limit) }, members };
+};
+
 const getPublicProfile = async (personId: string) => {
   const person = await prisma.person.findUnique({
     where: { id: personId },
@@ -586,6 +685,7 @@ const getPublicProfile = async (personId: string) => {
 
 export const personServices = {
   getPublicProfile,
+  discoverMembers,
   signUp,
   getSingle,
   getMyProfile,

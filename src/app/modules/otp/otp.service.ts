@@ -8,6 +8,18 @@ import { TVerifyOtpInput } from "./otp.validation";
 import jsonwebtoken, { Secret } from "jsonwebtoken";
 import config from "../../config";
 
+/**
+ * How long an emailed code stays valid.
+ *
+ * Ten minutes, because delivery through an external relay routinely takes a
+ * minute or more and longer to Gmail under load. The old windows were two,
+ * three and five minutes depending on which path you came in by, so a code
+ * could expire while it was still in transit and the person was told it was
+ * wrong. Codes are single use and stored hashed, so the extra minutes cost
+ * nothing in safety.
+ */
+const OTP_EXPIRY_MINUTES = 10;
+
 const verifyOtp = async (payload: TVerifyOtpInput) => {
   const auth = await prisma.auth.findUniqueOrThrow({
     where: {
@@ -141,7 +153,7 @@ const sendOtp = async (email: string) => {
 
   const otp = generateOTP();
   const hashedOtp = await bcrypt.hash(otp, 10);
-  const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+  const otpExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
   const otpData = {
     email: email,

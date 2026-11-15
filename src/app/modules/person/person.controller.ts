@@ -89,6 +89,15 @@ const getGroupRoles = handleAsyncRequest(async (req: TRequest, res) => {
   });
 });
 
+/** Home page directory. Signed in, so the caller is already known. */
+const discoverMembers = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await personServices.discoverMembers(req.query);
+  sendResponse(res, {
+    message: "Members retrieved successfully!",
+    data: result,
+  });
+});
+
 const getPublicProfile = handleAsyncRequest(
   async (req: TRequest, res: Response) => {
     const result = await personServices.getPublicProfile(
@@ -103,6 +112,7 @@ const getPublicProfile = handleAsyncRequest(
 
 export const personController = {
   getPublicProfile,
+  discoverMembers,
   signUp,
   getSingle,
   getMyProfile,

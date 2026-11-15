@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PostService = void 0;
 const client_1 = require("@prisma/client");
+const localMatch_1 = require("../../utils/localMatch");
+const saved_service_1 = require("../saved/saved.service");
 const awss3_1 = require("../../utils/awss3");
 const paginationCalculation_1 = require("../../utils/paginationCalculation");
 const prisma_1 = __importDefault(require("../../utils/prisma"));
@@ -305,7 +307,26 @@ const getSingle = async (id) => {
     });
     return result;
 };
-const getGroupPosts = async (groupId, options, query) => {
+/// Posts whose author is in the same place as the caller.
+///
+/// An impossible condition when we do not know where the caller is, rather
+/// than quietly showing them everything: a "Local services" list that is
+/// secretly every service is worse than an empty one.
+const localAuthorCondition = async (authId) => {
+    const home = authId ? await (0, localMatch_1.homeLocationOf)(authId) : null;
+    const tokens = (0, localMatch_1.locationTokens)(home);
+    if (!tokens.length)
+        return { id: { in: [] } };
+    return {
+        author: {
+            OR: tokens.flatMap(token => [
+                { person: { address: { contains: token, mode: "insensitive" } } },
+                { business: { address: { contains: token, mode: "insensitive" } } },
+            ]),
+        },
+    };
+};
+const getGroupPosts = async (groupId, options, query, authId) => {
     const andConditions = [
         { groupId },
         { status: client_1.PostStatus.ACTIVE },
@@ -314,6 +335,11 @@ const getGroupPosts = async (groupId, options, query) => {
         andConditions.push({
             caption: { contains: query.searchTerm, mode: "insensitive" },
         });
+    }
+    // A service post carries no place of its own, so "local" means the person
+    // offering it is near you — matched on their profile address.
+    if ((0, localMatch_1.wantsLocal)(query?.local)) {
+        andConditions.push(await localAuthorCondition(authId));
     }
     const whereConditions = { AND: andConditions };
     const { page, take, skip, sortBy, orderBy } = (0, paginationCalculation_1.calculatePagination)(options);
@@ -367,7 +393,13 @@ const getGroupPosts = async (groupId, options, query) => {
         limit: take,
         total,
     };
-    return { meta, posts };
+    // One query for the whole page, so the bookmark on each card knows whether
+    // it is already filled without a request per row.
+    const saved = await saved_service_1.savedServices.savedPostIds(authId ?? "", posts.map(post => post.id), "service");
+    return {
+        meta,
+        posts: posts.map(post => ({ ...post, isSaved: saved.has(post.id) })),
+    };
 };
 const allPosts = async (options, query) => {
     const andConditions = [];

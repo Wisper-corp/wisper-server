@@ -12,6 +12,9 @@ const handleZodValidation_1 = __importDefault(require("../../middlewares/handleZ
 const job_validation_1 = require("./job.validation");
 const router = (0, express_1.Router)();
 router.post("/", (0, authorize_1.default)(client_1.UserRole.BUSINESS, client_1.UserRole.PERSON), (0, handleZodValidation_1.default)(job_validation_1.createJobSchema), job_controller_1.jobController.createJob);
+// Open: the public job board is the thing that brings people to the app, so
+// it cannot sit behind the account they have not made yet.
+router.get("/public", job_controller_1.jobController.getPublicJobs);
 router.get("/", (0, authorize_1.default)(client_1.UserRole.BUSINESS, client_1.UserRole.PERSON, client_1.UserRole.ADMIN), job_controller_1.jobController.getAllJobs);
 router.get("/group/:groupId", (0, authorize_1.default)(client_1.UserRole.BUSINESS, client_1.UserRole.PERSON), job_controller_1.jobController.getGroupJobs);
 router.get("/:id", (0, authorize_1.default)(client_1.UserRole.BUSINESS, client_1.UserRole.PERSON, client_1.UserRole.ADMIN), job_controller_1.jobController.getSingleJob);

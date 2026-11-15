@@ -29,6 +29,14 @@ router.get(
 // email or phone.
 router.get("/public/:id", personController.getPublicProfile);
 
+// The Home page directory. Declared before "/:id" so the literal path is not
+// read as somebody's id.
+router.get(
+  "/discover",
+  authorize(UserRole.PERSON, UserRole.BUSINESS, UserRole.ADMIN),
+  personController.discoverMembers
+);
+
 router.get(
   "/:id",
   authorize(UserRole.ADMIN, UserRole.PERSON, UserRole.BUSINESS),

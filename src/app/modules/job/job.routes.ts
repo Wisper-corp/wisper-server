@@ -13,6 +13,10 @@ router.post(
   handleZodValidation(createJobSchema),
   jobController.createJob
 );
+// Open: the public job board is the thing that brings people to the app, so
+// it cannot sit behind the account they have not made yet.
+router.get("/public", jobController.getPublicJobs);
+
 router.get(
   "/",
   authorize(UserRole.BUSINESS, UserRole.PERSON, UserRole.ADMIN),

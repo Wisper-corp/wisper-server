@@ -14,8 +14,18 @@ export const sendEmail = async (
 ) => {
   const year = new Date().getFullYear().toString();
 
-  fs.readFile(templatePath, "utf8", async (err, data) => {
-    if (err) throw new ApiError(500, err.message || "Something went wrong");
+  // Read and send inline rather than in a callback. The callback version
+  // returned before Resend had been called, so a rejected send -- a bad key,
+  // a blocked address, a rate limit -- was thrown away inside a promise
+  // nobody held. Signup still answered "we sent a code" and no email existed.
+  let data: string;
+  try {
+    data = await fs.promises.readFile(templatePath, "utf8");
+  } catch (err: any) {
+    throw new ApiError(500, err?.message || "Could not read the email template");
+  }
+
+  {
 
     // Replace all placeholders
     let emailContent = data;
@@ -24,11 +34,19 @@ export const sendEmail = async (
     }
     emailContent = emailContent.replace("{{year}}", year);
 
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: "Wisper <support@wisperonline.com>",
       to,
       subject,
       html: emailContent,
     });
-  });
+
+    // Logged loudly and re-thrown: a code that was never sent must not look
+    // like one that was, or the person waits for an email that is not coming
+    // and nobody can tell them why.
+    if (error) {
+      console.error("[email] Resend refused the message:", to, subject, error);
+      throw new ApiError(502, "We could not send that email. Please try again.");
+    }
+  }
 };

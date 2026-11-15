@@ -22,6 +22,15 @@ const getAllJobs = handleAsyncRequest(async (req: TRequest, res) => {
   });
 });
 
+/** The public board. No session, so nothing here reads req.user. */
+const getPublicJobs = handleAsyncRequest(async (req: TRequest, res) => {
+  const result = await jobServices.getPublicJobs(req.query);
+  sendResponse(res, {
+    message: "Jobs retrieved successfully!",
+    data: result,
+  });
+});
+
 const getGroupJobs = handleAsyncRequest(async (req: TRequest, res) => {
   const options = pick(req.query, ["page", "limit", "sortBy", "orderBy"]);
   const result = await jobServices.getGroupJobs(
@@ -72,6 +81,7 @@ const deleteJob = handleAsyncRequest(async (req: TRequest, res) => {
 export const jobController = {
   createJob,
   getAllJobs,
+  getPublicJobs,
   getGroupJobs,
   getSingleJob,
   updateJob,

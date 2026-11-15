@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.jobServices = void 0;
+const localMatch_1 = require("../../utils/localMatch");
 const prisma_1 = __importDefault(require("../../utils/prisma"));
 const paginationCalculation_1 = require("../../utils/paginationCalculation");
 const job_constant_1 = require("./job.constant");
@@ -39,8 +40,10 @@ const createJob = async (userId, payload) => {
     // Default industry if not provided
     if (!payload.industry)
         payload.industry = "General";
-    // Strip fields not yet in Prisma client (added via raw SQL migration)
-    const { currency, applicationEmail, ...cleanPayload } = payload;
+    // applicationEmail is still absent from the generated client. `currency` no
+    // longer is -- and stripping it meant every job the app posted was saved
+    // with the column default of USD, even though the app sends NGN.
+    const { applicationEmail, ...cleanPayload } = payload;
     // Ensure group membership
     if (cleanPayload.groupId) {
         await ensureGroupMembership(cleanPayload.groupId, userId);
@@ -79,6 +82,81 @@ const createJob = async (userId, payload) => {
     }
     return result;
 };
+/// Jobs in Nigeria, or paid in naira.
+///
+/// Not "near the caller": half the accounts carry no address, which left the
+/// filter empty for them, and the audience here is Nigerian -- the question
+/// being asked is "is this job here, or paid in naira".
+///
+/// Cities are matched exactly or as the first part of "City, ..." rather than
+/// by substring: "Aba" appears inside plenty of words that are not a city.
+const localJobCondition = () => ({
+    OR: [
+        { currency: localMatch_1.NAIRA },
+        { location: { contains: "Nigeria", mode: "insensitive" } },
+        ...localMatch_1.NIGERIAN_CITIES.flatMap(city => [
+            { location: { equals: city, mode: "insensitive" } },
+            { location: { startsWith: `${city},`, mode: "insensitive" } },
+        ]),
+    ],
+});
+/**
+ * The public job board, for people who have not signed up.
+ *
+ * Separate from getAllJobs on purpose. That one answers "which jobs are
+ * relevant to this signed-in person" and leans on the caller being
+ * authorised; this one is served to anybody, so it returns only the fields a
+ * stranger may see -- never the author, who posted it, or anything that
+ * identifies a Wisper account.
+ */
+const getPublicJobs = async (query) => {
+    const page = Math.max(1, Number(query.page) || 1);
+    // Capped: a public endpoint with an unbounded limit is a free way to pull
+    // the whole table in one request.
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+    const skip = (page - 1) * limit;
+    const where = {};
+    if (query.searchTerm) {
+        where.OR = ["title", "companyName", "location", "industry"].map(field => ({
+            [field]: { contains: String(query.searchTerm), mode: "insensitive" },
+        }));
+    }
+    if (query.locationType)
+        where.locationType = query.locationType;
+    if (query.type)
+        where.type = query.type;
+    const [jobs, total] = await Promise.all([
+        prisma_1.default.job.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { createdAt: "desc" },
+            select: {
+                id: true,
+                title: true,
+                companyName: true,
+                companyLogo: true,
+                location: true,
+                locationType: true,
+                type: true,
+                experienceLevel: true,
+                industry: true,
+                salary: true,
+                currency: true,
+                compensationType: true,
+                createdAt: true,
+                // Deliberately absent: authorId, description, applicationLink and
+                // applicationEmail. Applying happens in the app, and handing out the
+                // employer's address here would route around that entirely.
+            },
+        }),
+        prisma_1.default.job.count({ where }),
+    ]);
+    return {
+        meta: { page, limit, total, pages: Math.ceil(total / limit) },
+        jobs,
+    };
+};
 const getAllJobs = async (options, query) => {
     const { searchTerm, maxSalary, minSalary, postedAfter } = query;
     const andConditions = [];
@@ -110,6 +188,9 @@ const getAllJobs = async (options, query) => {
                 gte: postedAfter,
             },
         });
+    }
+    if ((0, localMatch_1.wantsLocal)(query.local)) {
+        andConditions.push(localJobCondition());
     }
     const whereConditions = andConditions.length > 0 ? { AND: andConditions } : {};
     // Filter scraped jobs to English titles only
@@ -229,15 +310,33 @@ const presentableScrapedJob = {
         ],
     },
 };
-const getGroupJobs = async (groupId, options) => {
+const getGroupJobs = async (groupId, options, query = {}) => {
     // One designated community also surfaces the shared scraped-job pool, which
     // is otherwise unreachable (scraped jobs carry no groupId). Every other
     // community keeps showing only what its own members posted.
     const showsScrapedPool = Boolean(config_1.default.scrapedJobsGroupId) &&
         groupId === config_1.default.scrapedJobsGroupId;
-    const whereConditions = showsScrapedPool
+    const scope = showsScrapedPool
         ? { OR: [{ groupId }, presentableScrapedJob] }
         : { groupId };
+    // Everything below used to be dropped on the floor: this endpoint took no
+    // query at all, so searching inside a community's Jobs tab and filtering it
+    // by location both did nothing.
+    const andConditions = [scope];
+    if (query.searchTerm) {
+        andConditions.push({
+            OR: job_constant_1.jobSearchableFields.map(field => ({
+                [field]: { contains: query.searchTerm, mode: "insensitive" },
+            })),
+        });
+    }
+    if (query.locationType) {
+        andConditions.push({ locationType: query.locationType });
+    }
+    if ((0, localMatch_1.wantsLocal)(query.local)) {
+        andConditions.push(localJobCondition());
+    }
+    const whereConditions = { AND: andConditions };
     const { page, take, skip, sortBy, orderBy } = (0, paginationCalculation_1.calculatePagination)(options);
     const jobs = await prisma_1.default.job.findMany({
         where: whereConditions,
@@ -366,6 +465,7 @@ const deleteJob = async (id, userId) => {
 exports.jobServices = {
     createJob,
     getAllJobs,
+    getPublicJobs,
     getGroupJobs,
     getSingleJob,
     updateJob,
