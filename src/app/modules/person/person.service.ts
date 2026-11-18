@@ -632,25 +632,51 @@ const discoverMembers = async (query: Record<string, any>) => {
   return { meta: { page, limit, total, pages: Math.ceil(total / limit) }, members };
 };
 
-const getPublicProfile = async (personId: string) => {
-  const person = await prisma.person.findUnique({
-    where: { id: personId },
-    select: {
-      id: true,
-      name: true,
-      image: true,
-      title: true,
-      address: true,
-      email: true, // used below to reach the auth row, never returned
-    },
+const PUBLIC_PERSON_FIELDS = {
+  id: true,
+  name: true,
+  image: true,
+  title: true,
+  address: true,
+  email: true, // used below to reach the auth row, never returned
+} as const;
+
+const getPublicProfile = async (publicId: string) => {
+  // The id in a profile link may be either a Person id or an Auth id, and
+  // both are in circulation: the directory lists people by their Auth id,
+  // because posts, recommendations and status all hang off Auth, while this
+  // lookup was written against Person. Every link the directory produced
+  // therefore 404'd -- the row existed, it was simply being looked for in the
+  // wrong table. Accepting both also keeps already-shared links working.
+  let person = await prisma.person.findUnique({
+    where: { id: publicId },
+    select: PUBLIC_PERSON_FIELDS,
   });
+
+  let auth = person
+    ? await prisma.auth.findUnique({
+        where: { email: person.email },
+        select: { id: true, createdAt: true, status: true },
+      })
+    : null;
+
+  if (!person) {
+    const byAuth = await prisma.auth.findUnique({
+      where: { id: publicId },
+      select: {
+        id: true,
+        createdAt: true,
+        status: true,
+        person: { select: PUBLIC_PERSON_FIELDS },
+      },
+    });
+    if (byAuth?.person) {
+      person = byAuth.person;
+      auth = { id: byAuth.id, createdAt: byAuth.createdAt, status: byAuth.status };
+    }
+  }
 
   if (!person) throw new ApiError(404, "Profile not found!");
-
-  const auth = await prisma.auth.findUnique({
-    where: { email: person.email },
-    select: { id: true, createdAt: true, status: true },
-  });
 
   if (!auth || auth.status !== UserStatus.ACTIVE)
     throw new ApiError(404, "Profile not found!");
