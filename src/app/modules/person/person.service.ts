@@ -527,6 +527,11 @@ const getGroupRoles = async (
  * somebody's work history with their address in it, so the page says one
  * exists and stops there.
  */
+const ratingOf = (rs: { rating: number }[]): number | null => {
+  if (!rs.length) return null;
+  return Math.round((rs.reduce((a, r) => a + r.rating, 0) / rs.length) * 10) / 10;
+};
+
 const discoverMembers = async (query: Record<string, any>) => {
   const page = Math.max(1, Number(query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
@@ -567,8 +572,14 @@ const discoverMembers = async (query: Record<string, any>) => {
         posts: {
           take: 1,
           orderBy: { createdAt: "desc" },
-          select: { id: true, caption: true, price: true },
+          select: {
+            id: true, caption: true, aiSummary: true, price: true,
+            priceType: true, currency: true, deliveryTime: true, images: true,
+          },
         },
+        // The ratings people have actually been given. Averaged below rather
+        // than stored, because there is no rating column to drift out of date.
+        receivedRecommendations: { select: { rating: true } },
         _count: { select: { posts: true, resumes: true } },
       },
   });
@@ -595,8 +606,26 @@ const discoverMembers = async (query: Record<string, any>) => {
     serviceCount: r._count.posts,
     // Whether one exists, never where it lives.
     hasResume: r._count.resumes > 0,
+    // Averaged only when there is something to average. A member with no
+    // recommendations gets null, not 0 and not 5 -- the card then shows no
+    // rating at all. Printing "5.0 (0)" on every new profile would put a
+    // perfect score on people nobody has rated yet.
+    rating: ratingOf(r.receivedRecommendations),
+    ratingCount: r.receivedRecommendations.length,
     latestService: r.posts[0]
-      ? { id: r.posts[0].id, caption: r.posts[0].caption, price: r.posts[0].price }
+      ? {
+          id: r.posts[0].id,
+          // The card's line: the précis when the caption was too long to fit,
+          // otherwise the caption itself. The full caption always travels too,
+          // so the service page can show the author's own words.
+          summary: r.posts[0].aiSummary ?? r.posts[0].caption,
+          caption: r.posts[0].caption,
+          price: r.posts[0].price,
+          priceType: r.posts[0].priceType ?? "FIXED",
+          currency: r.posts[0].currency ?? "NGN",
+          deliveryTime: r.posts[0].deliveryTime ?? null,
+          image: r.posts[0].images?.[0] ?? null,
+        }
       : null,
   }));
 

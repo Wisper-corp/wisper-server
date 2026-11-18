@@ -151,6 +151,12 @@ model Post {
   // FIXED | MONTHLY | HOURLY -- how the price should be read. Plain text
   // rather than an enum so an older client sending nothing still writes.
   priceType     String?       @default("FIXED")
+  // A short, human-written précis of `caption`, for cards and lists where a
+  // full description cannot fit. Null when the caption is already short
+  // enough to show as it is -- the card falls back to the caption, so a post
+  // without one is not a broken post. `caption` is never rewritten: it stays
+  // the author's own words and is what the service page shows.
+  aiSummary     String?
   deliveryTime  String?
   currency      String?       @default("NGN")
   createdAt     DateTime      @default(now())
