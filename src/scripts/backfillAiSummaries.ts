@@ -1,4 +1,4 @@
-import prisma from "../app/shared/prisma";
+import prisma from "../app/utils/prisma";
 import { generateServiceSummary } from "../app/utils/aiSummary";
 
 /**
