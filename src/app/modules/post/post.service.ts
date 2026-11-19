@@ -49,6 +49,7 @@ const ensureGroupMembership = async (groupId: string, userId: string) => {
 };
 
 import { checkContentRelevance } from "../../utils/aiModeration";
+import { generateServiceSummary } from "../../utils/aiSummary";
 
 const create = async (id: string, payload: TCreatePost, files?: TFile[]) => {
   payload.authorId = id;
@@ -64,6 +65,11 @@ const create = async (id: string, payload: TCreatePost, files?: TFile[]) => {
       images.push(url);
     }
     payload.images = images;
+  }
+
+  // Generate AI summary if caption is provided and no summary exists
+  if (payload.caption && !payload.aiSummary) {
+    payload.aiSummary = generateServiceSummary(payload.caption);
   }
 
   const result = await prisma.post.create({
@@ -580,6 +586,11 @@ const update = async (
       images.push(url);
     }
     payload.images = images;
+  }
+
+  // Regenerate AI summary if caption was changed
+  if (payload.caption && payload.caption !== post.caption) {
+    payload.aiSummary = generateServiceSummary(payload.caption);
   }
 
   const result = await prisma.post.update({

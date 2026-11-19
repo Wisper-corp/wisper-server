@@ -11,7 +11,8 @@
     "build": "tsc",
     "start": "node dist/server.js -p 5008",
     "seed:admin": "ts-node-dev --respawn --transpile-only src/seedAdmin.ts",
-    "seed:general-chat": "ts-node-dev --respawn --transpile-only src/seedGeneralChat.ts"
+    "seed:general-chat": "ts-node-dev --respawn --transpile-only src/seedGeneralChat.ts",
+    "backfill:summaries": "ts-node src/scripts/backfillAiSummaries.ts"
   },
   "keywords": [],
   "author": "",
