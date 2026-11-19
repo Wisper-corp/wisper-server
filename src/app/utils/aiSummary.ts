@@ -89,10 +89,12 @@ function intelligentSummarize(text: string, maxLength: number): string {
 
   // Otherwise, condense the first sentence
   const firstSentence = sentences[0];
-  const condensed = condenseText(firstSentence);
-  
-  if (condensed.length <= maxLength) {
-    return condensed;
+  if (firstSentence) {
+    const condensed = condenseText(firstSentence);
+    
+    if (condensed.length <= maxLength) {
+      return condensed;
+    }
   }
 
   // Last resort: smart truncation
